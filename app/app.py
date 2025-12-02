@@ -42,10 +42,10 @@ def main():
         st.divider()
         st.header("⚙️ Agent Settings")
         daytona_key = st.text_input("Daytona API Key", type="password", help="Set in .env or here")
-        gemini_key = st.text_input("Gemini API Key", type="password", help="Set in .env or here")
+        openrouter_key = st.text_input("OpenRouter API Key", type="password", help="Set in .env or here")
         
         if daytona_key: os.environ['DAYTONA_API_KEY'] = daytona_key
-        if gemini_key: os.environ['GEMINI_API_KEY'] = gemini_key
+        if openrouter_key: os.environ['OPENROUTER_API_KEY'] = openrouter_key
 
     if uploaded_file:
         if 'current_file' not in st.session_state or st.session_state.current_file != uploaded_file.name:

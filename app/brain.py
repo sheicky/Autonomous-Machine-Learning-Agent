@@ -4,7 +4,7 @@ import base64
 import pandas as pd
 from dotenv import load_dotenv
 from daytona import Daytona, DaytonaConfig
-import google.generativeai as genai
+import requests
 import re
 import certifi
 import time
@@ -198,30 +198,43 @@ class AutoMLAgent:
             return f"Based on similar dataset ({best_match['rows']} rows), {best_match['best_model']} performed best."
         return ""
 
-    def call_gemini_with_retry(self, prompt, retries=3, delay=5):
+    def call_llm_with_retry(self, prompt, retries=3, delay=5):
         """
-        Calls Gemini API with retry logic for handling 429 (Too Many Requests) or other transient errors.
+        Calls OpenRouter API with retry logic.
         """
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            raise ValueError("Missing GEMINI_API_KEY")
+            raise ValueError("Missing OPENROUTER_API_KEY")
         
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:8501", # Optional
+            "X-Title": "AutoML Agent" # Optional
+        }
+        
+        data = {
+            "model": "google/gemini-2.0-flash-exp:free", # Using free tier model via OpenRouter
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
         
         for attempt in range(retries):
             try:
-                response = model.generate_content(prompt)
-                return response.text
+                response = requests.post(url, headers=headers, json=data)
+                response.raise_for_status()
+                return response.json()['choices'][0]['message']['content']
             except Exception as e:
-                if "429" in str(e) or "quota" in str(e).lower():
+                if attempt < retries - 1:
                     wait_time = delay * (2 ** attempt) + random.uniform(0, 1)
-                    print(f"Rate limit hit. Retrying in {wait_time:.2f} seconds...")
+                    print(f"API call failed. Retrying in {wait_time:.2f} seconds... Error: {e}")
                     time.sleep(wait_time)
                 else:
-                    raise e  # Re-raise if not a rate limit error
+                    raise e
         
-        raise Exception("Max retries exceeded for Gemini API")
+        raise Exception("Max retries exceeded for OpenRouter API")
 
     def analyze_and_plan(self, data_summary):
         """
@@ -256,9 +269,9 @@ class AutoMLAgent:
         }}
         """
         try:
-            text = self.call_gemini_with_retry(prompt)
+            text = self.call_llm_with_retry(prompt)
             
-            # Clean up potential markdown formatting from Gemini
+            # Clean up potential markdown formatting
             if text.startswith("```json"):
                 text = text.split("```json")[1].split("```")[0]
             elif text.startswith("```"):
@@ -290,18 +303,19 @@ class AutoMLAgent:
            - Scale Numerical columns (StandardScaler) if beneficial.
         6. Fit the preprocessor on X_train.
         7. Transform X_train and X_test.
-        8. Save the following files using joblib/pandas:
-           - 'X_train_processed.csv' (DataFrame with columns if possible, or numpy array)
-           - 'X_test_processed.csv'
-           - 'y_train.csv'
-           - 'y_test.csv'
-           - 'preprocessor.pkl' (The fitted ColumnTransformer object)
+        8. CRITICAL: Save the processed data to CSV files.
+           - If X_train_processed is a numpy array (e.g. from StandardScaler), convert it to DataFrame: 
+             pd.DataFrame(X_train_processed).to_csv('X_train_processed.csv', index=False)
+           - Do the same for 'X_test_processed.csv'.
+           - Save 'y_train.csv' and 'y_test.csv'.
+           - Save 'preprocessor.pkl' (The fitted ColumnTransformer object).
         9. Print JSON summary of processed data:
-           {{"status": "complete", "n_features": X_train.shape[1], "feature_names": list(feature_names) if possible else []}}
+           {{"status": "complete", "n_features": X_train_processed.shape[1]}}
+        10. Verify files exist: import os; print("Saved files:", os.listdir('.'))
         """
         
         try:
-            code = self.call_gemini_with_retry(prompt)
+            code = self.call_llm_with_retry(prompt)
             if code.startswith("```python"):
                 code = code.split("```python")[1].split("```")[0]
             elif code.startswith("```"):
@@ -333,7 +347,7 @@ class AutoMLAgent:
         """
         
         try:
-            code = self.call_gemini_with_retry(prompt)
+            code = self.call_llm_with_retry(prompt)
             if code.startswith("```python"):
                 code = code.split("```python")[1].split("```")[0]
             elif code.startswith("```"):
@@ -384,7 +398,7 @@ class AutoMLAgent:
         """
         
         try:
-            code = self.call_gemini_with_retry(prompt)
+            code = self.call_llm_with_retry(prompt)
             
             if code.startswith("```python"):
                 code = code.split("```python")[1].split("```")[0]
@@ -439,7 +453,7 @@ class AutoMLAgent:
         """
         
         try:
-            code = self.call_gemini_with_retry(prompt)
+            code = self.call_llm_with_retry(prompt)
             
             if code.startswith("```python"):
                 code = code.split("```python")[1].split("```")[0]
@@ -477,7 +491,7 @@ class AutoMLAgent:
         """
         
         try:
-            code = self.call_gemini_with_retry(prompt)
+            code = self.call_llm_with_retry(prompt)
             
             if code.startswith("```python"):
                 code = code.split("```python")[1].split("```")[0]
@@ -559,6 +573,7 @@ if __name__ == "__main__":
 import pandas as pd
 import json
 import numpy as np
+import os
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -571,19 +586,23 @@ class NpEncoder(json.JSONEncoder):
         return super(NpEncoder, self).default(obj)
 
 try:
-    # Try loading with header, if fails or looks weird (all strings), might be numpy save
-    df = pd.read_csv('{filename}')
-    
-    description = df.describe().to_dict()
-    
-    info = {{
-        "rows": df.shape[0],
-        "columns": df.shape[1],
-        "columns_list": list(df.columns[:20]), # Limit for UI
-        "description": description,
-        "head": df.head().to_dict(orient='records')
-    }}
-    print(json.dumps(info, cls=NpEncoder))
+    if not os.path.exists('{filename}'):
+        files = os.listdir('.')
+        print(json.dumps({{"error": f"File '{filename}' not found. Available files: {{files}}"}}))
+    else:
+        # Try loading with header, if fails or looks weird (all strings), might be numpy save
+        df = pd.read_csv('{filename}')
+        
+        description = df.describe().to_dict()
+        
+        info = {{
+            "rows": df.shape[0],
+            "columns": df.shape[1],
+            "columns_list": list(df.columns[:20]), # Limit for UI
+            "description": description,
+            "head": df.head().to_dict(orient='records')
+        }}
+        print(json.dumps(info, cls=NpEncoder))
 except Exception as e:
     print(json.dumps({{"error": str(e)}}))
 """
@@ -592,7 +611,7 @@ except Exception as e:
             try:
                 return json.loads(res['stdout'])
             except:
-                return {"error": "Failed to parse summary JSON"}
+                return {"error": f"Failed to parse summary JSON: {res['stdout']}"}
         return {"error": res['stderr']}
 
     def run_experiment(self, df, progress_callback=None):
