@@ -119,10 +119,22 @@ def main():
                                     "cols_list": summary['column_types']
                                 }
                                 st.session_state.plan = st.session_state.agent.analyze_and_plan(plan_summary)
+                                
+                                # Check if LLM returned an error
+                                if 'error' in st.session_state.plan:
+                                    st.error(f"❌ LLM Planning Failed: {st.session_state.plan['error']}")
+                                    if 'raw_response' in st.session_state.plan:
+                                        with st.expander("🔍 View LLM Raw Response"):
+                                            st.code(st.session_state.plan['raw_response'])
+                                    st.stop()
+                                
                                 st.session_state.pipeline_stage = 'planned'
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Planning Failed: {e}")
+                            import traceback
+                            with st.expander("Full Error Traceback"):
+                                st.code(traceback.format_exc())
 
                 # Step 2: Review Plan & Execute Preprocessing
                 if st.session_state.pipeline_stage in ['planned', 'preprocessed', 'selected', 'trained']:
@@ -150,7 +162,7 @@ def main():
                                     st.write(f"📤 Upload: {upload_result['stdout']}")
                                 
                                 # Verify upload via fs.list_files (not code execution)
-                                work_dir = st.session_state.agent.executor.sandbox.get_user_root_dir()
+                                work_dir = st.session_state.agent.executor.sandbox.get_user_home_dir()
                                 try:
                                     files = st.session_state.agent.executor.sandbox.fs.list_files(work_dir)
                                     file_names = [f.name for f in files]

@@ -83,7 +83,7 @@ class DaytonaExecutor:
             csv_bytes = csv_string.encode('utf-8')
             
             # Get the working directory in sandbox
-            work_dir = self.sandbox.get_user_root_dir()
+            work_dir = self.sandbox.get_user_home_dir()
             dest_path = f"{work_dir}/{filename}"
             
             print(f"[DEBUG] Uploading to: {dest_path}")
@@ -288,6 +288,7 @@ class AutoMLAgent:
         self.leaderboard = Leaderboard()
         self.history_file = "history.json"
         self.history = self.load_history()
+        self._llm_cache = {}  # Cache LLM responses to avoid repeated calls
 
     def load_history(self):
         if os.path.exists(self.history_file):
@@ -325,10 +326,18 @@ class AutoMLAgent:
             return f"Based on similar dataset ({best_match['rows']} rows), {best_match['best_model']} performed best."
         return ""
 
-    def call_llm_with_retry(self, prompt, retries=5, delay=15):
+    def call_llm_with_retry(self, prompt, retries=5, delay=20, use_cache=True):
         """
         Calls OpenRouter API with retry logic and exponential backoff for rate limits.
+        Includes caching to avoid redundant API calls.
         """
+        # Check cache first
+        import hashlib
+        cache_key = hashlib.md5(prompt.encode()).hexdigest()
+        if use_cache and cache_key in self._llm_cache:
+            print(f"[CACHE HIT] Using cached LLM response")
+            return self._llm_cache[cache_key]
+        
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
             raise ValueError("Missing OPENROUTER_API_KEY")
@@ -363,7 +372,13 @@ class AutoMLAgent:
                     continue
                     
                 response.raise_for_status()
-                return response.json()['choices'][0]['message']['content']
+                result = response.json()['choices'][0]['message']['content']
+                
+                # Cache the result
+                if use_cache:
+                    self._llm_cache[cache_key] = result
+                    
+                return result
             except requests.exceptions.HTTPError as e:
                 if "429" in str(e) and attempt < retries - 1:
                     wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
@@ -425,8 +440,14 @@ class AutoMLAgent:
                 text = text.split("```json")[1].split("```")[0]
             elif text.startswith("```"):
                 text = text.split("```")[1].split("```")[0]
+            
+            text = text.strip()
                 
             return json.loads(text)
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] Failed to parse LLM response as JSON: {e}")
+            print(f"[ERROR] LLM Response was:\n{text}")
+            return {"error": f"LLM returned invalid JSON: {str(e)}", "raw_response": text[:500]}
         except Exception as e:
             return {"error": str(e)}
 
@@ -698,22 +719,30 @@ if __name__ == "__main__":
         Robustly extracts JSON object from a text that might contain other logs.
         """
         try:
-            # Attempt to find the outermost JSON object
-            # Regex looks for { ... } allowing for nested braces roughly
-            # A simpler approach is to find the last occurrence of '}' and the first '{'
-            
             # Search for pattern {"model": ... } which we enforce in prompts
             match = re.search(r'\{.*"model":.*\}', text, re.DOTALL)
             if match:
-                return json.loads(match.group(0))
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError as e:
+                    print(f"[WARN] JSON parsing failed on matched text: {e}")
+                    print(f"[WARN] Matched text: {match.group(0)[:200]}...")
             
             # Fallback: find last bracket pair
             start = text.find('{')
             end = text.rfind('}') + 1
-            if start != -1 and end != -1:
-                return json.loads(text[start:end])
+            if start != -1 and end > start:
+                json_candidate = text[start:end]
+                try:
+                    return json.loads(json_candidate)
+                except json.JSONDecodeError as e:
+                    print(f"[WARN] JSON parsing failed on bracket extraction: {e}")
+                    print(f"[WARN] Extracted text: {json_candidate[:200]}...")
+                    
+            print(f"[ERROR] No valid JSON found in text: {text[:300]}...")
             return None
-        except:
+        except Exception as e:
+            print(f"[ERROR] extract_json failed with exception: {e}")
             return None
 
     def get_data_summary_from_sandbox(self, filename='X_train_processed.csv'):
