@@ -49,6 +49,8 @@ def main():
             "Llama 3.1 8B (Free, Higher Limits)": "meta-llama/llama-3.1-8b-instruct:free",
             "Gemini 2.0 Flash (Free)": "google/gemini-2.0-flash-exp:free",
             "Qwen 2.5 7B (Free)": "qwen/qwen-2.5-7b-instruct:free",
+            "Gemini 3 pro" : "google/gemini-3-pro-preview",
+            "GPT5.1" : "openai/gpt-5.1"
         }
         selected_model = st.selectbox("LLM Model", list(model_options.keys()), index=0)
         
