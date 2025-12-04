@@ -50,7 +50,8 @@ def main():
             "Gemini 2.0 Flash (Free)": "google/gemini-2.0-flash-exp:free",
             "Qwen 2.5 7B (Free)": "qwen/qwen-2.5-7b-instruct:free",
             "Gemini 3 pro" : "google/gemini-3-pro-preview",
-            "GPT5.1" : "openai/gpt-5.1"
+            "GPT5.1" : "openai/gpt-5.1",
+            "KAIT" : "kwaipilot/kat-coder-pro:free"
         }
         selected_model = st.selectbox("LLM Model", list(model_options.keys()), index=0)
         
