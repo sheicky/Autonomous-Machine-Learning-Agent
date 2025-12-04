@@ -44,8 +44,17 @@ def main():
         daytona_key = st.text_input("Daytona API Key", type="password", help="Set in .env or here")
         openrouter_key = st.text_input("OpenRouter API Key", type="password", help="Set in .env or here")
         
+        # Model selection for OpenRouter
+        model_options = {
+            "Llama 3.1 8B (Free, Higher Limits)": "meta-llama/llama-3.1-8b-instruct:free",
+            "Gemini 2.0 Flash (Free)": "google/gemini-2.0-flash-exp:free",
+            "Qwen 2.5 7B (Free)": "qwen/qwen-2.5-7b-instruct:free",
+        }
+        selected_model = st.selectbox("LLM Model", list(model_options.keys()), index=0)
+        
         if daytona_key: os.environ['DAYTONA_API_KEY'] = daytona_key
         if openrouter_key: os.environ['OPENROUTER_API_KEY'] = openrouter_key
+        os.environ['OPENROUTER_MODEL'] = model_options[selected_model]
 
     if uploaded_file:
         if 'current_file' not in st.session_state or st.session_state.current_file != uploaded_file.name:
@@ -127,6 +136,25 @@ def main():
                                 prep_strategy = plan.get('preprocessing_strategy', '')
                                 eng_strategy = plan.get('feature_engineering_strategy', '')
                                 
+                                # Re-upload data to ensure it exists in sandbox (handles session/sandbox resets)
+                                upload_result = st.session_state.agent.executor.upload_data(df, 'dataset.csv')
+                                
+                                # Show upload result for debugging
+                                if upload_result['exit_code'] != 0:
+                                    st.error(f"❌ Upload Failed: {upload_result['stderr']}")
+                                    return
+                                else:
+                                    st.write(f"📤 Upload: {upload_result['stdout']}")
+                                
+                                # Verify upload via fs.list_files (not code execution)
+                                work_dir = st.session_state.agent.executor.sandbox.get_user_root_dir()
+                                try:
+                                    files = st.session_state.agent.executor.sandbox.fs.list_files(work_dir)
+                                    file_names = [f.name for f in files]
+                                    st.write(f"📁 Files in sandbox ({work_dir}): {file_names}")
+                                except Exception as fs_err:
+                                    st.warning(f"Could not list sandbox files: {fs_err}")
+                                
                                 # Code Gen & Exec
                                 code = st.session_state.agent.generate_preprocessing_code(summary, target_col, prep_strategy, eng_strategy)
                                 res = st.session_state.agent.executor.execute_code(code)
@@ -139,7 +167,8 @@ def main():
                                     st.rerun()
                                 else:
                                     st.error(f"Preprocessing Failed:\n{res['stderr']}")
-                                    st.expander("Debug Code").code(code)
+                                    with st.expander("Debug Code"):
+                                        st.code(code)
 
                 # Step 3: Review Processed Data & Feature Selection
                 if st.session_state.pipeline_stage in ['preprocessed', 'selected', 'trained']:

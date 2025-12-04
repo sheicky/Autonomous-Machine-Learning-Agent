@@ -30,9 +30,38 @@ class DaytonaExecutor:
     def create_sandbox(self):
         try:
             self.sandbox = self.client.create()
-            return True, "Sandbox created successfully."
+            
+            # Ensure sandbox is started and ready
+            try:
+                self.sandbox.start()
+            except Exception as start_err:
+                # Might already be started or auto-started
+                print(f"[DEBUG] sandbox.start() note: {start_err}")
+            
+            # Wait for sandbox to be fully ready
+            self.sandbox.wait_for_sandbox_start(timeout=60)
+            
+            return True, "Sandbox created and started successfully."
         except Exception as e:
             return False, f"Failed to create sandbox: {str(e)}"
+
+    def ensure_sandbox_ready(self):
+        """Ensures sandbox exists and is started."""
+        if not self.sandbox:
+            success, msg = self.create_sandbox()
+            if not success:
+                raise RuntimeError(msg)
+        
+        # Make sure it's running
+        try:
+            self.sandbox.wait_for_sandbox_start(timeout=30)
+        except Exception as e:
+            # Try to start it
+            try:
+                self.sandbox.start()
+                self.sandbox.wait_for_sandbox_start(timeout=60)
+            except Exception as start_err:
+                raise RuntimeError(f"Failed to start sandbox: {start_err}")
 
     def install_dependencies(self, packages):
         if not self.sandbox:
@@ -43,25 +72,73 @@ class DaytonaExecutor:
         return self.execute_command(install_cmd)
 
     def upload_data(self, df, filename='dataset.csv'):
-        if not self.sandbox:
-             return False, "Sandbox not initialized."
+        try:
+            self.ensure_sandbox_ready()
+        except RuntimeError as e:
+            return {"exit_code": -1, "stdout": "", "stderr": str(e)}
         
-        csv_data = df.to_csv(index=False)
-        import base64
-        encoded_data = base64.b64encode(csv_data.encode('utf-8')).decode('utf-8')
-        
-        write_script = f"""
+        try:
+            # Convert DataFrame to CSV string
+            csv_string = df.to_csv(index=False)
+            csv_bytes = csv_string.encode('utf-8')
+            
+            # Get the working directory in sandbox
+            work_dir = self.sandbox.get_user_root_dir()
+            dest_path = f"{work_dir}/{filename}"
+            
+            print(f"[DEBUG] Uploading to: {dest_path}")
+            print(f"[DEBUG] CSV size: {len(csv_bytes)} bytes")
+            
+            # Try using the filesystem API to upload the file
+            try:
+                self.sandbox.fs.upload_file(csv_bytes, dest_path)
+                method = "fs.upload_file"
+            except Exception as fs_error:
+                print(f"[DEBUG] fs.upload_file failed: {fs_error}")
+                # Fallback: Write via code execution using base64
+                b64_data = base64.b64encode(csv_bytes).decode('utf-8')
+                write_code = f"""
 import base64
-data_b64 = "{encoded_data}"
+import os
+os.chdir('{work_dir}')
+csv_data = base64.b64decode('{b64_data}')
 with open('{filename}', 'wb') as f:
-    f.write(base64.b64decode(data_b64))
-print(f"Data written to {filename}")
+    f.write(csv_data)
+print(f'Wrote {{len(csv_data)}} bytes to {filename}')
+print('Files:', os.listdir('.'))
 """
-        return self.execute_code(write_script)
+                response = self.sandbox.process.code_run(write_code)
+                if response.exit_code != 0:
+                    return {"exit_code": -1, "stdout": "", "stderr": f"Fallback upload failed: {response.result}"}
+                method = "base64 fallback"
+            
+            # Verify the upload using code execution (more reliable than fs.list_files)
+            verify_code = f"""
+import os
+os.chdir('{work_dir}')
+if os.path.exists('{filename}'):
+    size = os.path.getsize('{filename}')
+    print(f'VERIFIED: {filename} exists, size={{size}} bytes')
+else:
+    print(f'ERROR: {filename} not found')
+print('All files:', os.listdir('.'))
+"""
+            verify_response = self.sandbox.process.code_run(verify_code)
+            
+            return {
+                "exit_code": 0,
+                "stdout": f"Upload via {method}. Verify result: {verify_response.result}",
+                "stderr": ""
+            }
+        except Exception as e:
+            import traceback
+            return {"exit_code": -1, "stdout": "", "stderr": f"Upload failed: {str(e)}\n{traceback.format_exc()}"}
 
     def execute_command(self, command):
-        if not self.sandbox:
-            self.create_sandbox()
+        try:
+            self.ensure_sandbox_ready()
+        except RuntimeError as e:
+            return {"exit_code": -1, "stdout": "", "stderr": str(e)}
             
         try:
             response = self.sandbox.process.code_run(command)
@@ -76,22 +153,84 @@ print(f"Data written to {filename}")
         except Exception as e:
             return {"exit_code": -1, "stdout": "", "stderr": str(e)}
 
-    def execute_code(self, code_string):
+    def write_file(self, filename, content):
+        """
+        Writes a file to the sandbox using the filesystem API.
+        """
         if not self.sandbox:
-             self.create_sandbox()
+            return False
+        try:
+            work_dir = self.sandbox.get_user_root_dir()
+            dest_path = f"{work_dir}/{filename}"
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+            self.sandbox.fs.upload_file(content, dest_path)
+            return True
+        except Exception as e:
+            print(f"[DEBUG] write_file failed: {e}")
+            return False
+
+    def execute_code(self, code_string):
+        try:
+            self.ensure_sandbox_ready()
+        except RuntimeError as e:
+            return {"exit_code": -1, "stdout": "", "stderr": str(e)}
 
         try:
-            response = self.sandbox.process.code_run(code_string)
+            work_dir = self.sandbox.get_user_root_dir()
+            
+            # Write the code to a temporary Python file and execute it
+            # This is more reliable than code_run for complex scripts
+            script_name = "temp_script.py"
+            script_path = f"{work_dir}/{script_name}"
+            
+            # Prepend working directory change and base imports
+            full_code = f"""#!/usr/bin/env python3
+import os
+import sys
+os.chdir('{work_dir}')
+sys.path.insert(0, '{work_dir}')
+{code_string}
+"""
+            
+            # Upload the script file using fs API
+            self.sandbox.fs.upload_file(full_code.encode('utf-8'), script_path)
+            
+            # Execute the script using process.exec with cwd parameter
+            exec_response = self.sandbox.process.exec(
+                f"python3 {script_name}", 
+                cwd=work_dir,
+                timeout=300  # 5 minute timeout for long-running operations
+            )
+            
             result = {
-                "exit_code": response.exit_code,
-                "stdout": response.result,
+                "exit_code": exec_response.exit_code,
+                "stdout": exec_response.result,
                 "stderr": ""
             }
-            if response.exit_code != 0:
-                result["stderr"] = f"Error (Exit Code {response.exit_code}): {response.result}"
+            if exec_response.exit_code != 0:
+                result["stderr"] = f"Error (Exit Code {exec_response.exit_code}): {exec_response.result}"
             return result
         except Exception as e:
-            return {"exit_code": -1, "stdout": "", "stderr": str(e)}
+            # Fallback to code_run if exec fails for any reason
+            try:
+                work_dir = self.sandbox.get_user_root_dir()
+                full_code = f"""
+import os
+os.chdir('{work_dir}')
+{code_string}
+"""
+                response = self.sandbox.process.code_run(full_code)
+                result = {
+                    "exit_code": response.exit_code,
+                    "stdout": response.result,
+                    "stderr": ""
+                }
+                if response.exit_code != 0:
+                    result["stderr"] = f"Error (Exit Code {response.exit_code}): {response.result}"
+                return result
+            except Exception as e2:
+                return {"exit_code": -1, "stdout": "", "stderr": f"Both exec and code_run failed. exec error: {str(e)}, code_run error: {str(e2)}"}
 
     def download_file(self, remote_path):
         """
@@ -100,26 +239,14 @@ print(f"Data written to {filename}")
         if not self.sandbox:
             return None
         
-        # Using python to cat the file content back
-        read_script = f"""
-import sys
-import base64
-try:
-    with open('{remote_path}', 'rb') as f:
-        print(base64.b64encode(f.read()).decode('utf-8'))
-except Exception as e:
-    print("FILE_NOT_FOUND")
-"""
-        res = self.execute_code(read_script)
-        if res['exit_code'] == 0:
-            try:
-                output = res['stdout'].strip()
-                if "FILE_NOT_FOUND" in output:
-                    return None
-                return base64.b64decode(output)
-            except:
-                return None
-        return None
+        try:
+            work_dir = self.sandbox.get_user_root_dir()
+            full_path = f"{work_dir}/{remote_path}"
+            content = self.sandbox.fs.download_file(full_path)
+            return content
+        except Exception as e:
+            print(f"Download failed: {e}")
+            return None
 
     def cleanup(self):
         if self.sandbox:
@@ -198,9 +325,9 @@ class AutoMLAgent:
             return f"Based on similar dataset ({best_match['rows']} rows), {best_match['best_model']} performed best."
         return ""
 
-    def call_llm_with_retry(self, prompt, retries=3, delay=5):
+    def call_llm_with_retry(self, prompt, retries=5, delay=15):
         """
-        Calls OpenRouter API with retry logic.
+        Calls OpenRouter API with retry logic and exponential backoff for rate limits.
         """
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
@@ -210,12 +337,15 @@ class AutoMLAgent:
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8501", # Optional
-            "X-Title": "AutoML Agent" # Optional
+            "HTTP-Referer": "http://localhost:8501",
+            "X-Title": "AutoML Agent"
         }
         
+        # Use a model with better rate limits - Llama 3.1 8B has higher free tier limits
+        model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+        
         data = {
-            "model": "google/gemini-2.0-flash-exp:free", # Using free tier model via OpenRouter
+            "model": model,
             "messages": [
                 {"role": "user", "content": prompt}
             ]
@@ -223,18 +353,37 @@ class AutoMLAgent:
         
         for attempt in range(retries):
             try:
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=120)
+                
+                # Check for rate limit specifically
+                if response.status_code == 429:
+                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
+                    print(f"Rate limit (429). Waiting {wait_time:.1f}s before retry {attempt+1}/{retries}...")
+                    time.sleep(wait_time)
+                    continue
+                    
                 response.raise_for_status()
                 return response.json()['choices'][0]['message']['content']
+            except requests.exceptions.HTTPError as e:
+                if "429" in str(e) and attempt < retries - 1:
+                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
+                    print(f"Rate limit hit. Waiting {wait_time:.1f}s before retry {attempt+1}/{retries}...")
+                    time.sleep(wait_time)
+                elif attempt < retries - 1:
+                    wait_time = delay + random.uniform(0, 2)
+                    print(f"API error: {e}. Retrying in {wait_time:.1f}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
             except Exception as e:
                 if attempt < retries - 1:
-                    wait_time = delay * (2 ** attempt) + random.uniform(0, 1)
-                    print(f"API call failed. Retrying in {wait_time:.2f} seconds... Error: {e}")
+                    wait_time = delay + random.uniform(0, 2)
+                    print(f"Error: {e}. Retrying in {wait_time:.1f}s...")
                     time.sleep(wait_time)
                 else:
                     raise e
         
-        raise Exception("Max retries exceeded for OpenRouter API")
+        raise Exception(f"Max retries ({retries}) exceeded for OpenRouter API")
 
     def analyze_and_plan(self, data_summary):
         """
@@ -292,26 +441,28 @@ class AutoMLAgent:
         Feature Engineering Strategy: {eng_strategy}
         
         Requirements:
-        1. Load 'dataset.csv'.
-        2. Separate features (X) and target (y).
-        3. Feature Engineering: Apply transformations (e.g., new columns) on X. 
+        1. Import os and pandas. 
+        2. Check if 'dataset.csv' exists. If not, print("ERROR: dataset.csv not found") and exit(1).
+        3. Load 'dataset.csv'.
+        4. Separate features (X) and target (y).
+        5. Feature Engineering: Apply transformations (e.g., new columns) on X. 
            (Ensure these are robust. If using row-independent math, apply to X. If using stats, fits on train).
-        4. Split into Train (80%) and Test (20%) sets using sklearn.model_selection.train_test_split(random_state=42).
-        5. Create a sklearn ColumnTransformer/Pipeline ('preprocessor') to:
+        6. Split into Train (80%) and Test (20%) sets using sklearn.model_selection.train_test_split(random_state=42).
+        7. Create a sklearn ColumnTransformer/Pipeline ('preprocessor') to:
            - Handle missing values (SimpleImputer).
            - Encode Categorical columns {data_summary['categorical_columns']} (OneHotEncoder or LabelEncoder).
            - Scale Numerical columns (StandardScaler) if beneficial.
-        6. Fit the preprocessor on X_train.
-        7. Transform X_train and X_test.
-        8. CRITICAL: Save the processed data to CSV files.
+        8. Fit the preprocessor on X_train.
+        9. Transform X_train and X_test.
+        10. CRITICAL: Save the processed data to CSV files in the CURRENT directory (./).
            - If X_train_processed is a numpy array (e.g. from StandardScaler), convert it to DataFrame: 
              pd.DataFrame(X_train_processed).to_csv('X_train_processed.csv', index=False)
            - Do the same for 'X_test_processed.csv'.
            - Save 'y_train.csv' and 'y_test.csv'.
            - Save 'preprocessor.pkl' (The fitted ColumnTransformer object).
-        9. Print JSON summary of processed data:
+        11. Print JSON summary of processed data:
            {{"status": "complete", "n_features": X_train_processed.shape[1]}}
-        10. Verify files exist: import os; print("Saved files:", os.listdir('.'))
+        12. Verify files exist: import os; print("Saved files in " + os.getcwd() + ":", os.listdir('.'))
         """
         
         try:
