@@ -11,3 +11,12 @@ python-dotenv
 pyarrow
 google-generativeai
 optuna
+shap
+imbalanced-learn
+xgboost
+lightgbm
+catboost
+fpdf
+jinja2
+pyyaml
+joblib
