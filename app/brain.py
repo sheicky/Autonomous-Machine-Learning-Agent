@@ -350,55 +350,76 @@ class AutoMLAgent:
             "X-Title": "AutoML Agent"
         }
         
-        # Use a model with better rate limits - Llama 3.1 8B has higher free tier limits
-        model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+        # Try multiple models in order of preference
+        models = [
+            os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "google/gemini-2.0-flash-exp:free",
+            "qwen/qwen-2.5-7b-instruct:free"
+        ]
         
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
+        last_error = None
         
-        for attempt in range(retries):
-            try:
-                response = requests.post(url, headers=headers, json=data, timeout=120)
-                
-                # Check for rate limit specifically
-                if response.status_code == 429:
-                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
-                    print(f"Rate limit (429). Waiting {wait_time:.1f}s before retry {attempt+1}/{retries}...")
-                    time.sleep(wait_time)
-                    continue
+        for model in models:
+            data = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4000  # Limit response size
+            }
+            
+            for attempt in range(min(retries, 3)):  # Max 3 attempts per model
+                try:
+                    print(f"[LLM] Trying {model} (attempt {attempt + 1})...")
+                    response = requests.post(url, headers=headers, json=data, timeout=180)
                     
-                response.raise_for_status()
-                result = response.json()['choices'][0]['message']['content']
-                
-                # Cache the result
-                if use_cache:
-                    self._llm_cache[cache_key] = result
+                    if response.status_code == 429:
+                        # Rate limit - try next model instead of waiting too long
+                        if attempt == 0:
+                            print(f"Rate limit on {model}, trying next model...")
+                            break
+                        wait_time = min(delay * (2 ** attempt), 60)  # Cap at 60s
+                        print(f"Rate limit (429). Waiting {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
                     
-                return result
-            except requests.exceptions.HTTPError as e:
-                if "429" in str(e) and attempt < retries - 1:
-                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
-                    print(f"Rate limit hit. Waiting {wait_time:.1f}s before retry {attempt+1}/{retries}...")
-                    time.sleep(wait_time)
-                elif attempt < retries - 1:
-                    wait_time = delay + random.uniform(0, 2)
-                    print(f"API error: {e}. Retrying in {wait_time:.1f}s...")
-                    time.sleep(wait_time)
-                else:
-                    raise e
-            except Exception as e:
-                if attempt < retries - 1:
-                    wait_time = delay + random.uniform(0, 2)
-                    print(f"Error: {e}. Retrying in {wait_time:.1f}s...")
-                    time.sleep(wait_time)
-                else:
-                    raise e
+                    if response.status_code == 408 or response.status_code == 504:
+                        # Timeout - try next model
+                        print(f"Timeout on {model}, trying next model...")
+                        break
+                        
+                    response.raise_for_status()
+                    result = response.json()['choices'][0]['message']['content']
+                    
+                    if use_cache:
+                        self._llm_cache[cache_key] = result
+                    
+                    print(f"[LLM] Success with {model}")
+                    return result
+                    
+                except requests.exceptions.Timeout as e:
+                    last_error = e
+                    print(f"Timeout on {model}, trying next model...")
+                    break
+                    
+                except requests.exceptions.RequestException as e:
+                    last_error = e
+                    if attempt < min(retries, 3) - 1:
+                        wait_time = min(delay * (2 ** attempt), 60)
+                        print(f"API error: {str(e)[:100]}. Retrying in {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"Failed with {model}, trying next model...")
+                        break
+                        
+                except Exception as e:
+                    last_error = e
+                    print(f"Error with {model}: {str(e)[:100]}")
+                    break
         
-        raise Exception(f"Max retries ({retries}) exceeded for OpenRouter API")
+        # All models failed
+        error_msg = f"All LLM models failed. Last error: {str(last_error)}"
+        print(f"[ERROR] {error_msg}")
+        raise Exception(error_msg)
 
     def analyze_and_plan(self, data_summary):
         """

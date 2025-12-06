@@ -83,16 +83,16 @@ def main():
                 col2.metric("Columns", summary['columns'])
                 col3.metric("Missing Values", summary['total_missing'])
                 col4.metric("Duplicates", summary['duplicate_rows'])
-                st.dataframe(summary['preview'], use_container_width=True)
+                st.dataframe(summary['preview'], width='stretch')
 
             with tab2:
-                st.dataframe(summary['description'], use_container_width=True)
+                st.dataframe(summary['description'], width='stretch')
 
             with tab3:
                 if len(summary['numerical_columns']) > 1:
                     corr = df[summary['numerical_columns']].corr()
                     fig_corr = px.imshow(corr, text_auto=True, aspect="auto", color_continuous_scale='RdBu_r')
-                    st.plotly_chart(fig_corr, use_container_width=True)
+                    st.plotly_chart(fig_corr, width='stretch')
 
             with tab4:
                 st.header("🤖 AutoML Orchestrator")
@@ -291,7 +291,7 @@ def main():
                         
                         # Show leaderboard without complex columns first
                         display_df = lb_df.drop(columns=['FeatureImportance', 'ConfusionMatrix'], errors='ignore')
-                        st.dataframe(display_df, use_container_width=True)
+                        st.dataframe(display_df, width='stretch')
                         
                         # Model Insights Section
                         st.divider()
@@ -311,7 +311,7 @@ def main():
                                     fi_df = fi_df.sort_values(by='Importance', ascending=True) # Sort for bar chart
                                     
                                     fig_imp = px.bar(fi_df, x='Importance', y='Feature', orientation='h')
-                                    st.plotly_chart(fig_imp, use_container_width=True)
+                                    st.plotly_chart(fig_imp, width='stretch')
                                 else:
                                     st.info("Feature Importance format not recognized.")
                              else:
@@ -327,7 +327,7 @@ def main():
                                                        labels=dict(x="Predicted", y="Actual", color="Count"),
                                                        x=['Class 0', 'Class 1'], y=['Class 0', 'Class 1'],
                                                        title=f"Confusion Matrix ({best_record['Model']})")
-                                    st.plotly_chart(fig_cm, use_container_width=True)
+                                    st.plotly_chart(fig_cm, width='stretch')
                                 else:
                                     st.info("Invalid Confusion Matrix format.")
                             else:

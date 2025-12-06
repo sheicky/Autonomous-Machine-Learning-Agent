@@ -87,10 +87,13 @@ def main():
                                        value=os.getenv("OPENROUTER_API_KEY", ""))
         
         model_options = {
-            "Llama 3.3 70B (Recommended)": "meta-llama/llama-3.3-70b-instruct:free",
+            "Claude 4.5" : "anthropic/claude-opus-4.5",
+            "Gemini 3 Pro" : "google/gemini-3-pro-preview",
             "Gemini 2.0 Flash": "google/gemini-2.0-flash-exp:free",
-            "Qwen 2.5 7B": "qwen/qwen-2.5-7b-instruct:free",
+            "GPT-5 Codex" : "openai/gpt-5.1-codex-max",
+            "CLaude Opus" : "anthropic/claude-opus-4.5",  
         }
+
         selected_model = st.selectbox("LLM Model", list(model_options.keys()), index=0)
         
         if daytona_key:
@@ -159,10 +162,10 @@ def main():
                 col4.metric("Duplicates", summary['duplicate_rows'])
                 
                 st.subheader("Dataset Preview")
-                st.dataframe(summary['preview'], use_container_width=True)
+                st.dataframe(summary['preview'], width='stretch')
                 
                 st.subheader("Statistical Summary")
-                st.dataframe(summary['description'], use_container_width=True)
+                st.dataframe(summary['description'], width='stretch')
 
             # Tab 2: Quality Analysis
             with tabs[1]:
@@ -247,7 +250,7 @@ def main():
                         color_continuous_scale='RdBu_r',
                         title="Feature Correlations"
                     )
-                    st.plotly_chart(fig_corr, use_container_width=True)
+                    st.plotly_chart(fig_corr, width='stretch')
                 
                 # Distribution plots
                 col1, col2 = st.columns(2)
@@ -264,7 +267,7 @@ def main():
                             title=f"Distribution of {selected_num}",
                             marginal="box"
                         )
-                        st.plotly_chart(fig_hist, use_container_width=True)
+                        st.plotly_chart(fig_hist, width='stretch')
                 
                 with col2:
                     if summary['categorical_columns']:
@@ -279,7 +282,7 @@ def main():
                             title=f"Top 10 Values in {selected_cat}",
                             labels={'x': selected_cat, 'y': 'Count'}
                         )
-                        st.plotly_chart(fig_bar, use_container_width=True)
+                        st.plotly_chart(fig_bar, width='stretch')
 
             # Tab 4: ML Pipeline
             with tabs[3]:
@@ -330,7 +333,7 @@ def render_ml_pipeline(df, summary):
         st.subheader("Step 1: AI Analysis & Planning")
         st.info("The AI will analyze your data quality and create an optimized ML strategy.")
         
-        if st.button("🧠 Generate ML Strategy", type="primary", use_container_width=True):
+        if st.button("🧠 Generate ML Strategy", type="primary", width='stretch'):
             with st.spinner("AI is analyzing your data..."):
                 try:
                     # Initialize agent
@@ -344,7 +347,8 @@ def render_ml_pipeline(df, summary):
                             status.update(label="Installing dependencies...", state="running")
                             st.session_state.agent.executor.install_dependencies([
                                 'pandas', 'scikit-learn', 'numpy', 'joblib', 'optuna',
-                                'shap', 'imbalanced-learn', 'xgboost', 'lightgbm'
+                                'shap', 'imbalanced-learn', 'xgboost', 'lightgbm',
+                                'catboost', 'fpdf', 'jinja2', 'pyyaml', 'joblib', 'imblearn'
                             ])
                             status.update(label="Uploading data...", state="running")
                             st.session_state.agent.executor.upload_data(df, 'dataset.csv')
@@ -410,7 +414,7 @@ def render_ml_pipeline(df, summary):
         if st.session_state.pipeline_stage == 'planned':
             st.subheader("Step 2: Data Preprocessing & Feature Engineering")
             
-            if st.button("🛠 Execute Preprocessing", type="primary", use_container_width=True):
+            if st.button("🛠 Execute Preprocessing", type="primary", width='stretch'):
                 with st.status("Preprocessing data...", expanded=True) as status:
                     try:
                         plan = st.session_state.plan
@@ -468,7 +472,7 @@ def render_ml_pipeline(df, summary):
             col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("✨ Run Feature Selection", use_container_width=True):
+                if st.button("✨ Run Feature Selection", width='stretch'):
                     with st.spinner("Selecting best features..."):
                         try:
                             plan = st.session_state.plan
@@ -494,7 +498,7 @@ def render_ml_pipeline(df, summary):
                             st.error(f"Error: {e}")
             
             with col2:
-                if st.button("⏩ Skip & Continue", use_container_width=True):
+                if st.button("⏩ Skip & Continue", width='stretch'):
                     st.session_state.pipeline_stage = 'selected'
                     st.rerun()
     
@@ -504,7 +508,7 @@ def render_ml_pipeline(df, summary):
             st.subheader("Step 4: Model Training with Optuna")
             st.info("🚀 Models will be trained in parallel using Optuna for hyperparameter optimization")
             
-            if st.button("🚀 Start Parallel Training", type="primary", use_container_width=True):
+            if st.button("🚀 Start Parallel Training", type="primary", width='stretch'):
                 with st.status("Training models in parallel...", expanded=True) as status:
                     try:
                         plan = st.session_state.plan
@@ -609,7 +613,7 @@ def render_results_export():
             # Display main metrics
             display_cols = ['Model', 'Accuracy', 'F1Score', 'ROC_AUC', 'TrainingTime', 'TrainAccuracy']
             display_df = lb_df[[col for col in display_cols if col in lb_df.columns]]
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width='stretch')
             
             # Best model insights
             st.divider()
@@ -643,7 +647,7 @@ def render_results_export():
                             orientation='h',
                             title="Top 20 Most Important Features"
                         )
-                        st.plotly_chart(fig_imp, use_container_width=True)
+                        st.plotly_chart(fig_imp, width='stretch')
                     else:
                         st.info("Feature importance not available for this model type")
                 else:
@@ -661,7 +665,7 @@ def render_results_export():
                             labels=dict(x="Predicted", y="Actual", color="Count"),
                             title=f"Confusion Matrix - {best_record['Model']}"
                         )
-                        st.plotly_chart(fig_cm, use_container_width=True)
+                        st.plotly_chart(fig_cm, width='stretch')
                 else:
                     st.info("Confusion matrix not available")
             
@@ -684,7 +688,7 @@ def render_results_export():
                 xaxis_title="Model",
                 yaxis_title="Score"
             )
-            st.plotly_chart(fig_compare, use_container_width=True)
+            st.plotly_chart(fig_compare, width='stretch')
             
             # Overfitting check
             st.divider()
@@ -756,7 +760,7 @@ def render_results_export():
             
             with col_export1:
                 st.markdown("##### 💾 Download Model")
-                if st.button("📥 Download Ensemble (.pkl)", use_container_width=True):
+                if st.button("📥 Download Ensemble (.pkl)", width='stretch'):
                     with st.spinner("Downloading..."):
                         content = st.session_state.agent.executor.download_file("final_ensemble.pkl")
                         if content:
@@ -765,33 +769,33 @@ def render_results_export():
                                 data=content,
                                 file_name="autonomous_model.pkl",
                                 mime="application/octet-stream",
-                                use_container_width=True
+                                width='stretch'
                             )
                         else:
                             st.warning("Model file not found")
             
             with col_export2:
                 st.markdown("##### ⚡ FastAPI Code")
-                if st.button("Generate API Code", use_container_width=True):
+                if st.button("Generate API Code", width='stretch'):
                     api_code = st.session_state.agent.generate_api_code("autonomous_model.pkl")
                     st.code(api_code, language="python")
                     st.download_button(
                         "Download serve.py",
                         api_code,
                         "serve.py",
-                        use_container_width=True
+                        width='stretch'
                     )
             
             with col_export3:
                 st.markdown("##### 🐳 Docker Setup")
-                if st.button("Generate Dockerfile", use_container_width=True):
+                if st.button("Generate Dockerfile", width='stretch'):
                     docker_code = st.session_state.agent.generate_docker_code()
                     st.code(docker_code, language="dockerfile")
                     st.download_button(
                         "Download Dockerfile",
                         docker_code,
                         "Dockerfile",
-                        use_container_width=True
+                        width='stretch'
                     )
             
             # Deployment instructions
@@ -830,7 +834,7 @@ def render_results_export():
             
             # Restart button
             st.divider()
-            if st.button("🔄 Start New Experiment", use_container_width=True):
+            if st.button("🔄 Start New Experiment", width='stretch'):
                 st.session_state.pipeline_stage = 'uploaded'
                 st.session_state.plan = None
                 st.session_state.agent = None
@@ -857,7 +861,7 @@ def render_experiments_tab():
     global_lb = st.session_state.experiment_tracker.get_leaderboard()
     
     if not global_lb.empty:
-        st.dataframe(global_lb.head(10), use_container_width=True)
+        st.dataframe(global_lb.head(10), width='stretch')
     
     # Experiment list
     st.divider()

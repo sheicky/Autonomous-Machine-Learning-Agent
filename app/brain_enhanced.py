@@ -336,40 +336,113 @@ class EnhancedAutoMLAgent:
             "X-Title": "AutoML Agent"
         }
         
-        model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+        # Try multiple models in order of preference
+        models = [
+            os.getenv("OPENROUTER_MODEL", "anthropic/claude-opus-4.5"),
+            "google/gemini-3-pro-preview",
+            "google/gemini-2.0-flash-exp:free",
+            "openai/gpt-5.1-codex-max",
+            "anthropic/claude-opus-4.5"
+        ]
         
-        data = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+        last_error = None
         
-        for attempt in range(retries):
-            try:
-                response = requests.post(url, headers=headers, json=data, timeout=120)
-                
-                if response.status_code == 429:
-                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
-                    print(f"Rate limit (429). Waiting {wait_time:.1f}s...")
-                    time.sleep(wait_time)
-                    continue
+        for model in models:
+            data = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4000  # Limit response size
+            }
+            
+            for attempt in range(min(retries, 3)):  # Max 3 attempts per model
+                try:
+                    print(f"[LLM] Trying {model} (attempt {attempt + 1})...")
+                    response = requests.post(url, headers=headers, json=data, timeout=180)
                     
-                response.raise_for_status()
-                result = response.json()['choices'][0]['message']['content']
-                
-                if use_cache:
-                    self._llm_cache[cache_key] = result
+                    if response.status_code == 429:
+                        # Rate limit - try next model instead of waiting too long
+                        if attempt == 0:
+                            print(f"Rate limit on {model}, trying next model...")
+                            break
+                        wait_time = min(delay * (2 ** attempt), 60)  # Cap at 60s
+                        print(f"Rate limit (429). Waiting {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
                     
-                return result
-            except Exception as e:
-                if attempt < retries - 1:
-                    wait_time = delay * (2 ** attempt) + random.uniform(1, 5)
-                    print(f"API error: {e}. Retrying in {wait_time:.1f}s...")
-                    time.sleep(wait_time)
-                else:
-                    raise e
+                    if response.status_code == 408 or response.status_code == 504:
+                        # Timeout - try next model
+                        print(f"Timeout on {model}, trying next model...")
+                        break
+                        
+                    response.raise_for_status()
+                    result = response.json()['choices'][0]['message']['content']
+                    
+                    if use_cache:
+                        self._llm_cache[cache_key] = result
+                    
+                    print(f"[LLM] Success with {model}")
+                    return result
+                    
+                except requests.exceptions.Timeout as e:
+                    last_error = e
+                    print(f"Timeout on {model}, trying next model...")
+                    break
+                    
+                except requests.exceptions.RequestException as e:
+                    last_error = e
+                    if attempt < min(retries, 3) - 1:
+                        wait_time = min(delay * (2 ** attempt), 60)
+                        print(f"API error: {str(e)[:100]}. Retrying in {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"Failed with {model}, trying next model...")
+                        break
+                        
+                except Exception as e:
+                    last_error = e
+                    print(f"Error with {model}: {str(e)[:100]}")
+                    break
         
-        raise Exception(f"Max retries ({retries}) exceeded")
+        # All models failed
+        error_msg = f"All LLM models failed. Last error: {str(last_error)}"
+        print(f"[ERROR] {error_msg}")
+        raise Exception(error_msg)
 
+    def _clean_llm_code(self, code):
+        """Clean LLM-generated code by removing explanatory text and markdown."""
+        # Remove markdown code blocks
+        if '```python' in code:
+            code = code.split('```python')[1].split('```')[0]
+        elif '```' in code:
+            parts = code.split('```')
+            for part in parts:
+                if 'import' in part:
+                    code = part
+                    break
+        
+        # Find first import statement
+        lines = code.split('\n')
+        code_start = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('import ') or stripped.startswith('from '):
+                code_start = i
+                break
+        
+        code = '\n'.join(lines[code_start:])
+        
+        # Remove trailing explanatory text
+        code_lines = code.split('\n')
+        clean_lines = []
+        for line in code_lines:
+            stripped = line.strip()
+            # Stop at common explanatory phrases
+            if any(stripped.startswith(phrase) for phrase in ['Here', 'This script', 'Note:', 'The above', 'This code']):
+                break
+            clean_lines.append(line)
+        
+        return '\n'.join(clean_lines).strip()
+    
     def analyze_and_plan(self, data_summary, quality_report=None):
         """Enhanced planning with data quality insights."""
         
@@ -440,49 +513,33 @@ Output JSON format:
             ])
         
         prompt = f"""
-Write a complete Python script for preprocessing with these enhancements:
+OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
 
-Target: '{target_col}'
+Target column: '{target_col}'
 Strategy: {prep_strategy}
 Feature Engineering: {eng_strategy}
-Quality Fixes Needed: {quality_fixes}
+Quality Fixes: {quality_fixes}
 
-Requirements:
-1. Load 'dataset.csv'
-2. Handle missing values intelligently (mean/median/mode based on distribution)
-3. Detect and handle outliers using RobustScaler if needed
-4. Feature Engineering:
-   - Polynomial features (degree 2) for small datasets (<1000 rows)
-   - Datetime decomposition (year, month, day, dayofweek) if datetime columns exist
-   - Interaction terms for top correlated features
-   - Log transform for skewed numerical features
-5. Encode categoricals: OneHotEncoder for low cardinality (<10), TargetEncoder for high
-6. Scale numerical features with StandardScaler or RobustScaler
-7. Handle class imbalance with SMOTE if ratio > 3:1
-8. Split train/test (80/20, stratified if classification)
-9. Save: X_train_processed.csv, X_test_processed.csv, y_train.csv, y_test.csv, preprocessor.pkl
-10. Print JSON: {{"status": "complete", "n_features": N, "applied_fixes": [...]}}
+Write preprocessing script that:
+1. Loads 'dataset.csv'
+2. Handles missing values
+3. Handles outliers with RobustScaler if needed
+4. Does feature engineering (polynomial, datetime, interactions, log transforms)
+5. Encodes categoricals with OneHotEncoder
+6. Scales with StandardScaler or RobustScaler
+7. Handles class imbalance with SMOTE if ratio > 3:1
+8. Splits train/test (80/20, stratified)
+9. Saves: X_train_processed.csv, X_test_processed.csv, y_train.csv, y_test.csv, preprocessor.pkl
+10. Prints JSON: {{"status": "complete", "n_features": N}}
 
-Use these imports:
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, RobustScaler, OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from imblearn.over_sampling import SMOTE
-import joblib
-import json
+CRITICAL: Start directly with: import pandas as pd
+NO text before imports. NO explanations after code.
 """
         
         try:
             code = self.call_llm_with_retry(prompt)
-            if code.startswith("```python"):
-                code = code.split("```python")[1].split("```")[0]
-            elif code.startswith("```"):
-                code = code.split("```")[1].split("```")[0]
-            return code.strip()
+            code = self._clean_llm_code(code)
+            return code
         except Exception as e:
             return f"print('Error generating preprocessing code: {str(e)}')"
 
