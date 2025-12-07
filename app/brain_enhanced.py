@@ -697,8 +697,16 @@ Steps:
 4. Train on X_train, y_train
 5. Predict on both train and test sets
 6. Calculate: accuracy, precision, recall, f1_score, confusion_matrix, training_time
-7. Save model to '{model_name.replace(' ', '_')}_model.pkl'
-8. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}}}
+7. Extract feature importance if model has feature_importances_ or coef_ attribute
+8. Save model to '{model_name.replace(' ', '_')}_model.pkl'
+9. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}, "feature_importance": {{"feature1": 0.5, "feature2": 0.3}} or null}}
+
+FEATURE IMPORTANCE EXTRACTION:
+- For tree-based models (RandomForest, GradientBoosting, DecisionTree): use model.feature_importances_
+- For linear models (LogisticRegression, SVC with linear kernel): use abs(model.coef_[0])
+- For other models: set to null
+- Return as dict mapping feature names to importance values
+- Get feature names from X_train.columns
 
 CRITICAL:
 - Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier, KNeighborsClassifier, SVC, GaussianNB, MLPClassifier
@@ -741,8 +749,16 @@ Steps:
 4. Run study with 10 trials (not 20, faster)
 5. Train best model (use class_weight='balanced' for classification if supported)
 6. Calculate all metrics
-7. Save to '{model_name.replace(' ', '_')}_optimized.pkl'
-8. Print JSON with metrics
+7. Extract feature importance if model has feature_importances_ or coef_ attribute
+8. Save to '{model_name.replace(' ', '_')}_optimized.pkl'
+9. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "roc_auc": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}, "feature_importance": {{"feature1": 0.5}} or null}}
+
+FEATURE IMPORTANCE EXTRACTION:
+- For tree-based models (RandomForest, GradientBoosting, DecisionTree): use model.feature_importances_
+- For linear models (LogisticRegression, SVC with linear kernel): use abs(model.coef_[0])
+- For other models: set to null
+- Return as dict mapping feature names to importance values
+- Get feature names from X_train.columns
 
 CRITICAL:
 - Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier, KNeighborsClassifier, SVC, GaussianNB, MLPClassifier
