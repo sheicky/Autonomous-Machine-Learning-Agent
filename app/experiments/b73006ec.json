@@ -1,0 +1,206 @@
+{
+  "id": "b73006ec",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_113702",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T11:37:46.011991",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem for a telecom company. The goal is to predict whether a customer will churn based on their demographics, services subscribed, and billing information. The dataset has 6,499 records with a mix of categorical and numerical features. Key strategies include encoding categorical variables, creating interaction features between services, and handling potential class imbalance in the target variable.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Convert Total Charges to numeric (may contain spaces/empty strings that became object type issues). 3) Encode binary categorical variables (Partner, Dependents, Phone Service, Paperless Billing, Churn) using Label Encoding. 4) Apply One-Hot Encoding to multi-class categorical variables (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 5) StandardScaler for numerical features (Tenure, Monthly Charges, Total Charges) to normalize distributions. 6) Handle any missing values in Total Charges with median imputation.",
+        "feature_engineering_strategy": "1) Create tenure groups/bins (0-12, 12-24, 24-48, 48+ months) to capture non-linear relationships. 2) Calculate average monthly charges = Total Charges / (Tenure + 1) to identify pricing anomalies. 3) Create service count feature summing all additional services (Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies). 4) Create interaction features: Contract_type \u00d7 Tenure, Internet_Service \u00d7 Monthly_Charges. 5) Binary flag for customers with no internet service dependencies. 6) Payment method risk flag (electronic check has higher churn historically). 7) Ratio feature: Monthly Charges / Total Services subscribed.",
+        "feature_selection_strategy": "Use a two-stage approach: 1) Initial filtering with SelectKBest using chi-squared test for categorical features and mutual_info_classif for numerical features (k=20). 2) Refine with SelectFromModel using a LightGBM classifier with feature importance threshold of 'median'. 3) Validate with Recursive Feature Elimination (RFE) using LogisticRegression to identify top 15 features for interpretability comparison.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "liblinear",
+                "lbfgs"
+              ],
+              "max_iter": [
+                1000
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ],
+              "penalty": [
+                "l1",
+                "l2"
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                null
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          },
+          {
+            "name": "XGBClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "subsample": [
+                0.8,
+                1.0
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                1,
+                2,
+                5
+              ],
+              "min_child_weight": [
+                1,
+                3,
+                5
+              ]
+            }
+          },
+          {
+            "name": "LGBMClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "num_leaves": [
+                31,
+                50,
+                70
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                0.1,
+                1
+              ],
+              "min_child_samples": [
+                20,
+                30,
+                50
+              ]
+            }
+          },
+          {
+            "name": "SVC",
+            "params": {
+              "kernel": [
+                "rbf",
+                "linear"
+              ],
+              "probability": [
+                true
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.1,
+                1,
+                10
+              ],
+              "gamma": [
+                "scale",
+                "auto"
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "roc_auc",
+          "f1",
+          "precision",
+          "recall",
+          "accuracy"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "SMOTE",
+        "outlier_handling": "robust_scaler"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T11:42:05.465511",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 44}"
+      }
+    }
+  },
+  "models": [],
+  "metrics": {},
+  "artifacts": []
+}

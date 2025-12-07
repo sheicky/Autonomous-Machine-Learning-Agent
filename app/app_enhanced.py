@@ -516,53 +516,59 @@ def render_ml_pipeline(df, summary):
     if st.session_state.pipeline_stage in ['selected', 'trained']:
         if st.session_state.pipeline_stage == 'selected':
             st.subheader("Step 4: Model Training with Optuna")
-            st.info("🚀 Models will be trained in parallel using Optuna for hyperparameter optimization")
+            st.info("🚀 Models will be trained using Optuna for hyperparameter optimization")
             
-            if st.button("🚀 Start Parallel Training", type="primary", width='stretch'):
-                with st.status("Training models in parallel...", expanded=True) as status:
+            if st.button("🚀 Start Model Training", type="primary", width='stretch'):
+                with st.status("Training models...", expanded=True) as status:
                     try:
                         plan = st.session_state.plan
                         target_col = plan.get('target_column', df.columns[-1])
                         use_selection = (st.session_state.pipeline_stage == 'selected')
                         
-                        # Progress container
-                        progress_text = st.empty()
-                        
-                        def update_progress(msg):
-                            progress_text.write(msg)
-                        
-                        # Train models in parallel
-                        results = st.session_state.agent.train_models_parallel(
-                            plan.get('models', []),
-                            target_col,
-                            use_selection,
-                            update_progress
-                        )
-                        
-                        # Process results
-                        for result in results:
-                            if result['success']:
-                                metrics = result['metrics']
-                                st.session_state.agent.leaderboard.add_entry(
-                                    metrics['model'],
-                                    metrics.get('accuracy', 0),
-                                    metrics.get('precision', 0),
-                                    metrics.get('recall', 0),
-                                    metrics.get('best_params', {}),
-                                    metrics.get('feature_importance', None),
-                                    metrics.get('train_accuracy', None),
-                                    metrics.get('confusion_matrix', None),
-                                    metrics.get('f1_score', None),
-                                    metrics.get('roc_auc', None),
-                                    metrics.get('training_time', None)
+                        # Train models sequentially (better for Streamlit UI updates)
+                        for i, model in enumerate(plan.get('models', []), 1):
+                            status.update(label=f"Training {model['name']} ({i}/{len(plan.get('models', []))})...", state="running")
+                            
+                            try:
+                                # Use simple training (no optimization) for faster, more reliable results
+                                code = st.session_state.agent.generate_training_code_simple(
+                                    model, target_col, use_selection
                                 )
+                                res = st.session_state.agent.executor.execute_code(code)
                                 
-                                # Log to experiment
-                                st.session_state.experiment_tracker.log_model(
-                                    metrics['model'],
-                                    metrics,
-                                    metrics.get('best_params', {})
-                                )
+                                if res['exit_code'] == 0:
+                                    metrics = st.session_state.agent.extract_json(res['stdout'])
+                                    if metrics:
+                                        st.session_state.agent.leaderboard.add_entry(
+                                            metrics['model'],
+                                            metrics.get('accuracy', 0),
+                                            metrics.get('precision', 0),
+                                            metrics.get('recall', 0),
+                                            metrics.get('best_params', {}),
+                                            metrics.get('feature_importance', None),
+                                            metrics.get('train_accuracy', None),
+                                            metrics.get('confusion_matrix', None),
+                                            metrics.get('f1_score', None),
+                                            metrics.get('roc_auc', None),
+                                            metrics.get('training_time', None)
+                                        )
+                                        
+                                        # Log to experiment
+                                        st.session_state.experiment_tracker.log_model(
+                                            metrics['model'],
+                                            metrics,
+                                            metrics.get('best_params', {})
+                                        )
+                                        
+                                        status.write(f"✅ {model['name']} - Accuracy: {metrics.get('accuracy', 0):.4f}")
+                                    else:
+                                        status.write(f"⚠️ {model['name']} - No metrics returned")
+                                else:
+                                    status.write(f"❌ {model['name']} - Training failed")
+                                    st.error(f"Error: {res['stderr'][:200]}")
+                            except Exception as e:
+                                status.write(f"❌ {model['name']} - Error: {str(e)[:100]}")
+                                continue
                         
                         # Build ensemble
                         if len(st.session_state.agent.leaderboard.records) >= 2:
@@ -634,8 +640,13 @@ def render_results_export():
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Best Model", best_record['Model'])
             col2.metric("Accuracy", f"{best_record['Accuracy']:.4f}")
-            col3.metric("F1 Score", f"{best_record.get('F1Score', 0):.4f}")
-            col4.metric("ROC AUC", f"{best_record.get('ROC_AUC', 0):.4f}")
+            
+            # Handle None values for optional metrics
+            f1_score = best_record.get('F1Score', 0)
+            col3.metric("F1 Score", f"{f1_score:.4f}" if f1_score else "N/A")
+            
+            roc_auc = best_record.get('ROC_AUC', 0)
+            col4.metric("ROC AUC", f"{roc_auc:.4f}" if roc_auc else "N/A")
             
             # Visualizations
             col_viz1, col_viz2 = st.columns(2)

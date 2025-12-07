@@ -1,0 +1,348 @@
+{
+  "id": "a97cea0f",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_175542",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T17:56:16.390843",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem for a telecom company. The goal is to predict whether a customer will churn (leave) based on their demographics, service subscriptions, and billing information. The dataset has 6499 rows with a mix of categorical and numerical features. Key strategies include encoding categorical variables, creating interaction features for service usage patterns, and handling potential class imbalance in the target variable.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Convert Total Charges to numeric (may have whitespace/empty strings causing issues). 3) Label encode binary categorical columns (Partner, Dependents, Phone Service, Paperless Billing, Churn). 4) One-hot encode multi-class categorical columns (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 5) Handle missing values in Total Charges (likely new customers with 0 tenure) by imputing with 0 or median. 6) Scale numerical features (Tenure, Monthly Charges, Total Charges) using StandardScaler for linear models and leave unscaled for tree-based models.",
+        "feature_engineering_strategy": "1) Create tenure_group feature binning tenure into categories (0-12, 13-24, 25-48, 49-72 months). 2) Create average_monthly_charge = Total Charges / (Tenure + 1) to capture spending consistency. 3) Create service_count feature counting total subscribed services (Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies). 4) Create has_internet_addon = 1 if customer has any internet add-on service. 5) Create contract_value interaction = Monthly Charges * Contract_duration_months. 6) Create is_new_customer flag for Tenure <= 6 months. 7) Create payment_risk flag for customers with Electronic check payment method (typically higher churn).",
+        "feature_selection_strategy": "Use a two-stage approach: 1) First apply SelectFromModel with RandomForest to identify top features based on feature importance. 2) Use RFE with LogisticRegression to refine selection and identify optimal feature subset. 3) Validate with permutation importance on held-out set. Target 15-20 most impactful features to avoid overfitting.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "lbfgs",
+                "liblinear"
+              ],
+              "max_iter": [
+                1000
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ],
+              "penalty": [
+                "l2"
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                20,
+                null
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          },
+          {
+            "name": "XGBClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "subsample": [
+                0.8,
+                0.9,
+                1.0
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                9
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                1,
+                5,
+                10
+              ],
+              "min_child_weight": [
+                1,
+                3,
+                5
+              ]
+            }
+          },
+          {
+            "name": "LGBMClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "num_leaves": [
+                31,
+                50,
+                70
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                -1
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                1,
+                5
+              ],
+              "min_child_samples": [
+                20,
+                50,
+                100
+              ]
+            }
+          },
+          {
+            "name": "SVC",
+            "params": {
+              "kernel": [
+                "rbf",
+                "linear"
+              ],
+              "probability": [
+                true
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.1,
+                1,
+                10
+              ],
+              "gamma": [
+                "scale",
+                "auto"
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "roc_auc",
+          "f1",
+          "precision",
+          "recall",
+          "accuracy"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "class_weight",
+        "outlier_handling": "robust_scaler"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T17:56:38.289841",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 44}"
+      }
+    },
+    "feature_selection": {
+      "timestamp": "2025-12-07T17:57:18.259154",
+      "data": {
+        "status": "success"
+      }
+    }
+  },
+  "models": [
+    {
+      "name": "LogisticRegression",
+      "timestamp": "2025-12-07T17:57:40.662660",
+      "metrics": {
+        "model": "LogisticRegression",
+        "accuracy": 0.806923076923077,
+        "train_accuracy": 0.7989998076553183,
+        "precision": 0.7998301181966521,
+        "recall": 0.806923076923077,
+        "f1_score": 0.802136211315058,
+        "confusion_matrix": [
+          [
+            855,
+            102
+          ],
+          [
+            149,
+            194
+          ]
+        ],
+        "training_time": 0.006512880325317383,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "RandomForestClassifier",
+      "timestamp": "2025-12-07T17:57:51.004390",
+      "metrics": {
+        "model": "RandomForestClassifier",
+        "accuracy": 0.7661538461538462,
+        "train_accuracy": 0.9946143489132525,
+        "precision": 0.7532010233668769,
+        "recall": 0.7661538461538462,
+        "f1_score": 0.7573000117814123,
+        "confusion_matrix": [
+          [
+            839,
+            118
+          ],
+          [
+            186,
+            157
+          ]
+        ],
+        "training_time": 0.4581022262573242,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "XGBClassifier",
+      "timestamp": "2025-12-07T17:58:02.270841",
+      "metrics": {
+        "model": "XGBClassifier",
+        "accuracy": 0.8015,
+        "train_accuracy": 0.8277,
+        "precision": 0.7914,
+        "recall": 0.8015,
+        "f1_score": 0.7935,
+        "confusion_matrix": [
+          [
+            864,
+            93
+          ],
+          [
+            165,
+            178
+          ]
+        ],
+        "training_time": 0.5207,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "LGBMClassifier",
+      "timestamp": "2025-12-07T17:58:13.456589",
+      "metrics": {
+        "model": "LGBMClassifier",
+        "accuracy": 0.8015,
+        "train_accuracy": 0.8277,
+        "precision": 0.7914,
+        "recall": 0.8015,
+        "f1_score": 0.7935,
+        "confusion_matrix": [
+          [
+            864,
+            93
+          ],
+          [
+            165,
+            178
+          ]
+        ],
+        "training_time": 0.5008,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "SVC",
+      "timestamp": "2025-12-07T17:58:23.890563",
+      "metrics": {
+        "model": "SVC",
+        "accuracy": 0.7946153846153846,
+        "train_accuracy": 0.8045778034237353,
+        "precision": 0.7833142389525367,
+        "recall": 0.7946153846153846,
+        "f1_score": 0.7856028254466052,
+        "confusion_matrix": [
+          [
+            862,
+            95
+          ],
+          [
+            172,
+            171
+          ]
+        ],
+        "training_time": 0.32540178298950195,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    }
+  ],
+  "metrics": {},
+  "artifacts": []
+}

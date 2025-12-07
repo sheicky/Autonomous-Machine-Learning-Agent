@@ -588,58 +588,76 @@ NO text before imports. NO explanations.
         except Exception as e:
             return f"print('Error: {str(e)}')"
 
-    def generate_training_code_optuna(self, model_config, target_col, use_selected_features=False):
-        """Generate training code with Optuna optimization."""
+    def generate_training_code_simple(self, model_config, target_col, use_selected_features=False):
+        """Generate simple training code without optimization."""
         
         data_prefix = "selected" if use_selected_features else "processed"
+        model_name = model_config['name']
         
         prompt = f"""
-Write Python script to train {model_config['name']} using OPTUNA for hyperparameter optimization.
+OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
+
+Train {model_name} with default parameters.
 
 Data: X_train_{data_prefix}.csv, X_test_{data_prefix}.csv, y_train.csv, y_test.csv
 
 Steps:
-1. Load data and preprocessor
-2. Define Optuna objective function with these params: {model_config['params']}
-3. Use optuna.create_study(direction='maximize') with 20 trials
-4. Train best model
-5. Calculate metrics: accuracy, precision, recall, f1, roc_auc, training_time
-6. Calculate SHAP values for feature importance (top 20 features)
-7. Get confusion matrix
-8. Save model pipeline to '{model_config['name'].replace(' ', '_')}_model.pkl'
-9. Print JSON with all metrics
+1. Load data files
+2. Initialize {model_name} with default params
+3. Train on X_train, y_train
+4. Predict on both train and test sets
+5. Calculate: accuracy, precision, recall, f1_score, confusion_matrix, training_time
+6. Save model to '{model_name.replace(' ', '_')}_model.pkl'
+7. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}}}
 
-Required imports:
-import optuna
-import pandas as pd
-import numpy as np
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
-import shap
-import joblib
-import json
-import time
-
-Example Optuna objective:
-def objective(trial):
-    params = {{
-        'max_depth': trial.suggest_int('max_depth', 3, 10),
-        'n_estimators': trial.suggest_int('n_estimators', 50, 200)
-    }}
-    model = RandomForestClassifier(**params)
-    model.fit(X_train, y_train)
-    return accuracy_score(y_test, model.predict(X_test))
-
-study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=20, show_progress_bar=False)
+CRITICAL:
+- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier
+- Do NOT use: XGBoost, LightGBM, CatBoost, SHAP (not available)
+- Use only: pandas, numpy, sklearn, joblib, json, time
+- Start with: import pandas as pd
 """
         
         try:
             code = self.call_llm_with_retry(prompt)
-            if code.startswith("```python"):
-                code = code.split("```python")[1].split("```")[0]
-            elif code.startswith("```"):
-                code = code.split("```")[1].split("```")[0]
-            return code.strip()
+            code = self._clean_llm_code(code)
+            return code
+        except Exception as e:
+            return f"print('Error: {str(e)}')"
+    
+    def generate_training_code_optuna(self, model_config, target_col, use_selected_features=False):
+        """Generate training code with Optuna optimization."""
+        
+        data_prefix = "selected" if use_selected_features else "processed"
+        model_name = model_config['name']
+        
+        prompt = f"""
+OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
+
+Train {model_name} with Optuna hyperparameter optimization.
+
+Data: X_train_{data_prefix}.csv, X_test_{data_prefix}.csv, y_train.csv, y_test.csv
+Params to optimize: {model_config.get('params', {})}
+
+Steps:
+1. Load data
+2. Define Optuna objective with params: {model_config.get('params', {})}
+3. Run study with 10 trials (not 20, faster)
+4. Train best model
+5. Calculate all metrics
+6. Save to '{model_name.replace(' ', '_')}_optimized.pkl'
+7. Print JSON with metrics
+
+CRITICAL:
+- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier
+- Do NOT use: XGBoost, LightGBM, CatBoost, SHAP
+- Do NOT use optuna if not available - use GridSearchCV instead
+- Start with: import pandas as pd
+"""
+        
+        try:
+            code = self.call_llm_with_retry(prompt)
+            code = self._clean_llm_code(code)
+            return code
         except Exception as e:
             return f"print('Error: {str(e)}')"
 

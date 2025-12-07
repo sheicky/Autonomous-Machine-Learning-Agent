@@ -1,0 +1,224 @@
+{
+  "id": "5b2a2255",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_174927",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T17:50:03.867957",
+      "data": {
+        "plan_overview": "Binary classification problem to predict customer churn in a telecom dataset. The plan involves preprocessing categorical and numerical features, engineering interaction and aggregated features, handling potential class imbalance, and evaluating multiple models optimized for churn prediction.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Encode binary categorical variables (Partner, Dependents, Phone Service, Paperless Billing, Churn) using Label Encoding. 3) Apply One-Hot Encoding to multi-class categorical variables (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 4) Gender and Senior Citizen are already numeric (0/1). 5) Handle any missing values in Total Charges (common issue when Tenure=0) by imputing with 0 or Monthly Charges. 6) Scale numerical features (Tenure, Monthly Charges, Total Charges) using StandardScaler for distance-based models and tree models can use raw values.",
+        "feature_engineering_strategy": "1) Create tenure buckets (0-12, 13-24, 25-48, 49-72 months) to capture non-linear relationships. 2) Calculate Average Monthly Charge = Total Charges / (Tenure + 1) to identify pricing anomalies. 3) Create service count feature aggregating all 'Yes' services (Phone, Internet add-ons). 4) Create interaction features: Tenure \u00d7 Monthly Charges, Contract Type \u00d7 Monthly Charges. 5) Binary flag for customers with no internet service (impacts multiple dependent features). 6) Create 'high_value_customer' flag based on Monthly Charges percentile. 7) Ratio feature: Total Charges / Expected Charges (Tenure \u00d7 Monthly Charges) to detect billing irregularities.",
+        "feature_selection_strategy": "Apply a two-stage approach: 1) First use SelectFromModel with LightGBM to identify top features based on importance, removing features with near-zero importance. 2) Then use RFE with cross-validation (RFECV) using Logistic Regression to find optimal feature subset. 3) Also compute mutual information scores to validate selected features capture relevant information about churn.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "lbfgs",
+                "saga"
+              ],
+              "max_iter": [
+                1000
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ],
+              "penalty": [
+                "l2"
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                20,
+                null
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          },
+          {
+            "name": "XGBClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "subsample": [
+                0.8,
+                1.0
+              ],
+              "colsample_bytree": [
+                0.8,
+                1.0
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                9
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                0.1,
+                1
+              ],
+              "gamma": [
+                0,
+                0.1,
+                0.2
+              ]
+            }
+          },
+          {
+            "name": "LGBMClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "num_leaves": [
+                31,
+                50,
+                70
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                -1
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                0.1,
+                1
+              ],
+              "min_child_samples": [
+                20,
+                50,
+                100
+              ]
+            }
+          },
+          {
+            "name": "GradientBoostingClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "subsample": [
+                0.8,
+                1.0
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "min_samples_split": [
+                2,
+                5
+              ],
+              "min_samples_leaf": [
+                1,
+                2
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "roc_auc",
+          "f1",
+          "precision",
+          "recall",
+          "accuracy"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "class_weight",
+        "outlier_handling": "winsorize"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T17:51:49.536314",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 44}"
+      }
+    }
+  },
+  "models": [],
+  "metrics": {},
+  "artifacts": []
+}
