@@ -345,11 +345,21 @@ def render_ml_pipeline(df, summary):
                         with st.status("Initializing sandbox...") as status:
                             st.session_state.agent.executor.create_sandbox()
                             status.update(label="Installing dependencies...", state="running")
+                            # Install core dependencies first
                             st.session_state.agent.executor.install_dependencies([
-                                'pandas', 'scikit-learn', 'numpy', 'joblib', 'optuna',
-                                'shap', 'imbalanced-learn', 'xgboost', 'lightgbm',
-                                'catboost', 'fpdf', 'jinja2', 'pyyaml', 'joblib', 'imblearn'
+                                'pandas', 'numpy', 'scikit-learn', 'joblib'
                             ])
+                            # Install ML libraries
+                            st.session_state.agent.executor.install_dependencies([
+                                'imbalanced-learn', 'optuna'
+                            ])
+                            # Install optional libraries (may fail, that's ok)
+                            try:
+                                st.session_state.agent.executor.install_dependencies([
+                                    'shap', 'xgboost', 'lightgbm'
+                                ])
+                            except:
+                                pass  # Optional packages
                             status.update(label="Uploading data...", state="running")
                             st.session_state.agent.executor.upload_data(df, 'dataset.csv')
                             status.update(label="Sandbox ready!", state="complete")

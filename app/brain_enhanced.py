@@ -512,28 +512,46 @@ Output JSON format:
                 for rec in quality_report['recommendations'][:3]
             ])
         
+        # Get actual column information
+        categorical_cols = data_summary.get('categorical_columns', [])
+        numerical_cols = data_summary.get('numerical_columns', [])
+        all_columns = list(data_summary.get('column_types', {}).keys())
+        
         prompt = f"""
 OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
 
-Target column: '{target_col}'
+Dataset Info:
+- Target column: '{target_col}'
+- All columns: {all_columns}
+- Categorical columns: {categorical_cols}
+- Numerical columns: {numerical_cols}
+- Total rows: {data_summary.get('rows', 'unknown')}
+
 Strategy: {prep_strategy}
 Feature Engineering: {eng_strategy}
 Quality Fixes: {quality_fixes}
 
 Write preprocessing script that:
 1. Loads 'dataset.csv'
-2. Handles missing values
-3. Handles outliers with RobustScaler if needed
-4. Does feature engineering (polynomial, datetime, interactions, log transforms)
-5. Encodes categoricals with OneHotEncoder
-6. Scales with StandardScaler or RobustScaler
-7. Handles class imbalance with SMOTE if ratio > 3:1
-8. Splits train/test (80/20, stratified)
-9. Saves: X_train_processed.csv, X_test_processed.csv, y_train.csv, y_test.csv, preprocessor.pkl
-10. Prints JSON: {{"status": "complete", "n_features": N}}
+2. Separates features (X) and target (y) using column '{target_col}'
+3. Handles missing values in numerical columns with median
+4. Handles missing values in categorical columns with most_frequent
+5. Encodes categorical columns with OneHotEncoder (handle_unknown='ignore')
+6. Scales numerical columns with StandardScaler
+7. Splits train/test (80/20, stratified if classification, random_state=42)
+8. Creates ColumnTransformer with numerical and categorical pipelines
+9. Fits on X_train, transforms both X_train and X_test
+10. Saves: X_train_processed.csv, X_test_processed.csv, y_train.csv, y_test.csv, preprocessor.pkl
+11. Prints JSON: {{"status": "complete", "n_features": N}}
 
-CRITICAL: Start directly with: import pandas as pd
-NO text before imports. NO explanations after code.
+CRITICAL RULES:
+- Use ONLY the columns listed above - do NOT assume other columns exist
+- Do NOT use SMOTE or imbalanced-learn
+- Do NOT use TargetEncoder
+- Do NOT drop any columns unless they are the target
+- Use only: pandas, numpy, sklearn.preprocessing, sklearn.model_selection, sklearn.compose, sklearn.pipeline, sklearn.impute, joblib, json
+- Start directly with: import pandas as pd
+- NO text before imports. NO explanations after code.
 """
         
         try:
@@ -547,31 +565,26 @@ NO text before imports. NO explanations after code.
         """Generate feature selection code."""
         
         prompt = f"""
-Write Python script for feature selection using {strategy}.
+OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
+
+Feature selection using {strategy}.
 
 Requirements:
-1. Load processed data files
-2. Use {strategy} (SelectKBest with f_classif, RFE, or SelectFromModel)
-3. Select top 50% of features or minimum 10 features
-4. Transform train and test sets
+1. Load: X_train_processed.csv, X_test_processed.csv, y_train.csv
+2. Use {strategy} (SelectKBest with f_classif)
+3. Select top 50% of features or minimum 10
+4. Transform train and test
 5. Save: X_train_selected.csv, X_test_selected.csv, selector.pkl
-6. Print JSON with selected feature indices and scores
+6. Print JSON: {{"status": "complete", "n_features_selected": N}}
 
-Imports:
-from sklearn.feature_selection import SelectKBest, RFE, SelectFromModel, f_classif, mutual_info_classif
-from sklearn.ensemble import RandomForestClassifier
-import pandas as pd
-import joblib
-import json
+CRITICAL: Start with: import pandas as pd
+NO text before imports. NO explanations.
 """
         
         try:
             code = self.call_llm_with_retry(prompt)
-            if code.startswith("```python"):
-                code = code.split("```python")[1].split("```")[0]
-            elif code.startswith("```"):
-                code = code.split("```")[1].split("```")[0]
-            return code.strip()
+            code = self._clean_llm_code(code)
+            return code
         except Exception as e:
             return f"print('Error: {str(e)}')"
 

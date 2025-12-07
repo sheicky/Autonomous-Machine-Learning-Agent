@@ -1,0 +1,215 @@
+{
+  "id": "6326b88a",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_012427",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T01:25:03.393078",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem for a telecom company. The goal is to predict whether a customer will churn (leave) based on their demographics, service subscriptions, and billing information. The dataset has 6499 rows with a mix of categorical and numerical features. Key focus areas include encoding categorical variables, creating meaningful feature interactions (e.g., tenure vs charges), and handling potential class imbalance in the target variable.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Convert Total Charges to numeric (handle any whitespace/empty strings that may cause issues). 3) Encode binary categorical variables (Partner, Dependents, Phone Service, Paperless Billing, Churn) using Label Encoding. 4) Apply One-Hot Encoding for multi-class categorical variables (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 5) Gender and Senior Citizen are already numeric. 6) Scale numerical features (Tenure, Monthly Charges, Total Charges) using StandardScaler for linear models and leave unscaled for tree-based models.",
+        "feature_engineering_strategy": "1) Create tenure groups/bins (0-12, 13-24, 25-48, 49-72 months) to capture non-linear tenure effects. 2) Calculate average monthly charges = Total Charges / (Tenure + 1) to identify pricing inconsistencies. 3) Create service count feature = sum of all subscribed services (Online Security, Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies). 4) Create interaction features: Tenure * Monthly Charges, Contract type * Tenure. 5) Create binary flag for customers with no internet service (aggregates multiple 'No internet service' values). 6) Create total services bundled indicator (phone + internet + streaming). 7) Senior Citizen * Contract interaction to capture elderly contract preferences.",
+        "feature_selection_strategy": "Apply a two-stage approach: 1) First use SelectFromModel with RandomForest to remove clearly irrelevant features (threshold='median'). 2) Then apply RFE with cross-validation using LogisticRegression to select optimal feature subset. 3) Additionally compute mutual information scores for categorical features to validate selection. Target selecting 15-20 most important features.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "liblinear",
+                "saga"
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ],
+              "penalty": [
+                "l1",
+                "l2"
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "criterion": [
+                "gini",
+                "entropy"
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                20,
+                null
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ]
+            }
+          },
+          {
+            "name": "XGBClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                9
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                0.1,
+                1
+              ],
+              "subsample": [
+                0.8,
+                1.0
+              ],
+              "colsample_bytree": [
+                0.8,
+                1.0
+              ]
+            }
+          },
+          {
+            "name": "LGBMClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                -1
+              ],
+              "num_leaves": [
+                31,
+                50,
+                100
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                0.1,
+                1
+              ],
+              "min_child_samples": [
+                20,
+                50,
+                100
+              ]
+            }
+          },
+          {
+            "name": "SVC",
+            "params": {
+              "kernel": [
+                "rbf",
+                "linear"
+              ],
+              "probability": [
+                true
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.1,
+                1,
+                10
+              ],
+              "gamma": [
+                "scale",
+                "auto",
+                0.01,
+                0.1
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "roc_auc",
+          "f1",
+          "precision",
+          "recall",
+          "accuracy"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "SMOTE",
+        "outlier_handling": "winsorize"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T01:25:47.558028",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 54}"
+      }
+    },
+    "feature_selection": {
+      "timestamp": "2025-12-07T01:26:39.369759",
+      "data": {
+        "status": "success"
+      }
+    }
+  },
+  "models": [],
+  "metrics": {},
+  "artifacts": []
+}

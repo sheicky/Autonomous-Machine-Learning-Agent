@@ -116,8 +116,6 @@ class CacheManager:
     
     def get_stats(self):
         """Get cache statistics."""
-        total_size = sum(self.cache_dir.glob("*.pkl"))
-        
         stats = {
             "total_entries": len(self.metadata),
             "total_size_mb": sum(v.get("size_bytes", 0) for v in self.metadata.values()) / (1024 * 1024),

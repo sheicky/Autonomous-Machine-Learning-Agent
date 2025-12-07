@@ -20,3 +20,6 @@ fpdf
 jinja2
 pyyaml
 joblib
+imblearn 
+
+

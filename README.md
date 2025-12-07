@@ -249,15 +249,18 @@ The enhanced version automatically applies:
 - Verify internet connection
 - Wait 30s and retry (automatic retry enabled)
 
-**LLM Rate Limits**
-- Switch to Llama 3.3 70B (higher limits)
-- Responses are cached automatically
-- Exponential backoff retry enabled
+**LLM Rate Limits / Timeouts** ⚡ NEW: Auto-fixed!
+- Enhanced version automatically tries 4 different models
+- Switches models on rate limit or timeout
+- No manual intervention needed
+- See [TROUBLESHOOTING_API.md](TROUBLESHOOTING_API.md) for details
 
 **Out of Memory**
 - Use feature selection
 - Reduce Optuna trials (default: 20)
 - Enable caching to avoid reprocessing
+
+**For detailed API troubleshooting:** See [TROUBLESHOOTING_API.md](TROUBLESHOOTING_API.md)
 
 ## 📊 Supported Data Formats
 
