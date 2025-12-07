@@ -1,0 +1,203 @@
+{
+  "id": "86c6bf36",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_180924",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T18:10:01.749277",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem for a telecom company. The goal is to predict whether a customer will churn (leave) based on their demographics, service subscriptions, and billing information. The dataset has 6,499 rows with a mix of categorical and numerical features. The plan focuses on proper encoding of categorical variables, feature engineering to capture customer behavior patterns, and using ensemble methods optimized for imbalanced classification.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Convert 'Total Charges' to numeric (handle potential whitespace/empty strings that may be read as objects). 3) Apply Label Encoding for binary categorical variables (Partner, Dependents, Phone Service, Paperless Billing, Churn). 4) Apply One-Hot Encoding for multi-class categorical variables (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 5) StandardScaler for numerical features (Tenure, Monthly Charges, Total Charges) to normalize distributions. 6) Handle any missing values in Total Charges with median imputation (common issue when Tenure=0).",
+        "feature_engineering_strategy": "1) Create tenure groups: 'New' (0-12 months), 'Mid' (13-36 months), 'Long-term' (37+ months). 2) Calculate 'Average Monthly Spend' = Total Charges / (Tenure + 1) to avoid division by zero. 3) Create 'Services Count' feature summing all subscribed services (Online Security, Backup, Device Protection, Tech Support, Streaming). 4) Create interaction features: 'Contract_MonthlyCharges' (Contract type * Monthly Charges), 'Tenure_Services' (Tenure * Services Count). 5) Create 'Has Premium Services' binary flag for customers with any streaming service. 6) Create 'Payment Risk' flag for customers with electronic check payment (historically higher churn). 7) Polynomial features (degree=2) for Tenure and Monthly Charges to capture non-linear relationships.",
+        "feature_selection_strategy": "Use a two-stage approach: 1) Initial filtering with SelectKBest using mutual_info_classif to remove irrelevant features (keep top 25 features). 2) Recursive Feature Elimination with Cross-Validation (RFECV) using a LightGBM estimator to identify optimal feature subset. 3) Validate with feature importance from tree-based models to ensure consistency.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "liblinear",
+                "saga"
+              ],
+              "penalty": [
+                "l1",
+                "l2"
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                null
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          },
+          {
+            "name": "XGBClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "subsample": [
+                0.8,
+                0.9,
+                1.0
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                1,
+                2,
+                5
+              ]
+            }
+          },
+          {
+            "name": "LGBMClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1
+              ],
+              "num_leaves": [
+                20,
+                31,
+                50
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7,
+                -1
+              ],
+              "reg_alpha": [
+                0,
+                0.1,
+                1
+              ],
+              "reg_lambda": [
+                0,
+                1,
+                5
+              ]
+            }
+          },
+          {
+            "name": "GradientBoostingClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200
+              ],
+              "learning_rate": [
+                0.05,
+                0.1,
+                0.2
+              ],
+              "min_samples_split": [
+                2,
+                5
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "roc_auc",
+          "f1",
+          "precision",
+          "recall",
+          "accuracy"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "SMOTE",
+        "outlier_handling": "robust_scaler"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T18:10:26.826021",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 55}"
+      }
+    }
+  },
+  "models": [],
+  "metrics": {},
+  "artifacts": []
+}

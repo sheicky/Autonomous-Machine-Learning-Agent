@@ -441,7 +441,28 @@ class EnhancedAutoMLAgent:
                 break
             clean_lines.append(line)
         
-        return '\n'.join(clean_lines).strip()
+        code = '\n'.join(clean_lines).strip()
+        
+        # VALIDATION: Remove forbidden imports
+        forbidden_packages = ['lightgbm', 'xgboost', 'catboost', 'imblearn', 'shap']
+        validated_lines = []
+        for line in code.split('\n'):
+            stripped = line.strip()
+            # Check if line imports forbidden package
+            is_forbidden = False
+            for pkg in forbidden_packages:
+                if (f'import {pkg}' in stripped or 
+                    f'from {pkg}' in stripped or
+                    f'import {pkg}.' in stripped or
+                    f'from {pkg}.' in stripped):
+                    print(f"[VALIDATION] Removed forbidden import: {line}")
+                    is_forbidden = True
+                    break
+            
+            if not is_forbidden:
+                validated_lines.append(line)
+        
+        return '\n'.join(validated_lines)
     
     def analyze_and_plan(self, data_summary, quality_report=None):
         """Enhanced planning with data quality insights."""
@@ -457,6 +478,20 @@ Data Quality Report:
 
 Create a plan that addresses data quality issues and optimizes for the problem type.
 
+CRITICAL CONSTRAINTS:
+- Use ONLY sklearn models from this list:
+  * LogisticRegression
+  * RandomForestClassifier
+  * GradientBoostingClassifier
+  * DecisionTreeClassifier
+  * KNeighborsClassifier
+  * SVC (Support Vector Classifier)
+  * GaussianNB (Naive Bayes)
+  * MLPClassifier (Neural Network)
+- Suggest AT LEAST 6 different models for comprehensive comparison
+- Do NOT suggest: XGBoost, LightGBM, CatBoost, AdaBoost, ExtraTrees (not available)
+- Do NOT use SMOTE or imbalanced-learn (use class_weight='balanced' instead)
+
 Output JSON format:
 {{
     "plan_overview": "Brief explanation",
@@ -466,17 +501,22 @@ Output JSON format:
     "feature_engineering_strategy": "Specific transformations (polynomial, datetime, interactions)",
     "feature_selection_strategy": "Method (SelectKBest, RFE, SelectFromModel)",
     "models": [
-        {{
-            "name": "ModelName",
-            "params": {{"param": ["value1", "value2"]}},
-            "regularization_params": {{"C": [0.01, 0.1, 1], "max_depth": [3, 5, 7]}}
-        }}
+        {{"name": "LogisticRegression", "params": {{}}}},
+        {{"name": "RandomForestClassifier", "params": {{}}}},
+        {{"name": "GradientBoostingClassifier", "params": {{}}}},
+        {{"name": "DecisionTreeClassifier", "params": {{}}}},
+        {{"name": "KNeighborsClassifier", "params": {{}}}},
+        {{"name": "SVC", "params": {{}}}},
+        {{"name": "GaussianNB", "params": {{}}}},
+        {{"name": "MLPClassifier", "params": {{}}}}
     ],
     "evaluation_metrics": ["accuracy", "f1", "roc_auc"],
     "cross_validation_folds": 5,
-    "handle_imbalance": "SMOTE/class_weight/none",
+    "handle_imbalance": "class_weight/none (NO SMOTE)",
     "outlier_handling": "robust_scaler/winsorize/none"
 }}
+
+IMPORTANT: Include AT LEAST 6 models from the allowed list above!
 """
         
         try:
@@ -492,6 +532,52 @@ Output JSON format:
             
             # Store problem type
             self.problem_type = plan.get('problem_type', 'binary')
+            
+            # VALIDATE AND FILTER MODELS - only allow sklearn models
+            allowed_models = [
+                'LogisticRegression', 
+                'RandomForestClassifier', 
+                'GradientBoostingClassifier',
+                'DecisionTreeClassifier',
+                'KNeighborsClassifier',
+                'SVC',
+                'GaussianNB',
+                'MLPClassifier'
+            ]
+            
+            if 'models' in plan:
+                filtered_models = []
+                for model in plan['models']:
+                    model_name = model.get('name', '')
+                    # Check if it's an allowed model
+                    if any(allowed in model_name for allowed in allowed_models):
+                        filtered_models.append(model)
+                    else:
+                        print(f"[WARNING] Filtered out unsupported model: {model_name}")
+                
+                # If no valid models or less than 6, use comprehensive defaults
+                if len(filtered_models) < 6:
+                    print(f"[WARNING] Only {len(filtered_models)} valid models, adding defaults to reach 6+")
+                    default_models = [
+                        {"name": "LogisticRegression", "params": {}},
+                        {"name": "RandomForestClassifier", "params": {}},
+                        {"name": "GradientBoostingClassifier", "params": {}},
+                        {"name": "DecisionTreeClassifier", "params": {}},
+                        {"name": "KNeighborsClassifier", "params": {}},
+                        {"name": "SVC", "params": {}},
+                        {"name": "GaussianNB", "params": {}},
+                        {"name": "MLPClassifier", "params": {}}
+                    ]
+                    
+                    # Add defaults that aren't already in filtered_models
+                    existing_names = [m['name'] for m in filtered_models]
+                    for default in default_models:
+                        if default['name'] not in existing_names:
+                            filtered_models.append(default)
+                        if len(filtered_models) >= 6:
+                            break
+                
+                plan['models'] = filtered_models
             
             return plan
         except json.JSONDecodeError as e:
@@ -599,21 +685,27 @@ OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
 
 Train {model_name} with default parameters.
 
-Data: X_train_{data_prefix}.csv, X_test_{data_prefix}.csv, y_train.csv, y_test.csv
+Data files to load (with fallback):
+- Try X_train_selected.csv first, if not found use X_train_processed.csv
+- Try X_test_selected.csv first, if not found use X_test_processed.csv
+- y_train.csv, y_test.csv
 
 Steps:
-1. Load data files
-2. Initialize {model_name} with default params
-3. Train on X_train, y_train
-4. Predict on both train and test sets
-5. Calculate: accuracy, precision, recall, f1_score, confusion_matrix, training_time
-6. Save model to '{model_name.replace(' ', '_')}_model.pkl'
-7. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}}}
+1. Check if X_train_selected.csv exists, if not use X_train_processed.csv
+2. Load data files with fallback logic
+3. Initialize {model_name} with default params (use class_weight='balanced' for classification)
+4. Train on X_train, y_train
+5. Predict on both train and test sets
+6. Calculate: accuracy, precision, recall, f1_score, confusion_matrix, training_time
+7. Save model to '{model_name.replace(' ', '_')}_model.pkl'
+8. Print JSON: {{"model": "{model_name}", "accuracy": X, "train_accuracy": X, "precision": X, "recall": X, "f1_score": X, "confusion_matrix": [[]], "training_time": X, "best_params": {{}}}}
 
 CRITICAL:
-- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier
+- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier, KNeighborsClassifier, SVC, GaussianNB, MLPClassifier
+- Import from: sklearn.linear_model, sklearn.ensemble, sklearn.tree, sklearn.neighbors, sklearn.svm, sklearn.naive_bayes, sklearn.neural_network
 - Do NOT use: XGBoost, LightGBM, CatBoost, SHAP (not available)
-- Use only: pandas, numpy, sklearn, joblib, json, time
+- Check file existence with os.path.exists() before loading
+- Use only: pandas, numpy, sklearn, joblib, json, time, os
 - Start with: import pandas as pd
 """
         
@@ -635,22 +727,30 @@ OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
 
 Train {model_name} with Optuna hyperparameter optimization.
 
-Data: X_train_{data_prefix}.csv, X_test_{data_prefix}.csv, y_train.csv, y_test.csv
+Data files to load (with fallback):
+- Try X_train_selected.csv first, if not found use X_train_processed.csv
+- Try X_test_selected.csv first, if not found use X_test_processed.csv
+- y_train.csv, y_test.csv
+
 Params to optimize: {model_config.get('params', {})}
 
 Steps:
-1. Load data
-2. Define Optuna objective with params: {model_config.get('params', {})}
-3. Run study with 10 trials (not 20, faster)
-4. Train best model
-5. Calculate all metrics
-6. Save to '{model_name.replace(' ', '_')}_optimized.pkl'
-7. Print JSON with metrics
+1. Check if X_train_selected.csv exists, if not use X_train_processed.csv
+2. Load data files with fallback logic
+3. Define Optuna objective with params: {model_config.get('params', {})}
+4. Run study with 10 trials (not 20, faster)
+5. Train best model (use class_weight='balanced' for classification if supported)
+6. Calculate all metrics
+7. Save to '{model_name.replace(' ', '_')}_optimized.pkl'
+8. Print JSON with metrics
 
 CRITICAL:
-- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier
+- Use ONLY sklearn models: LogisticRegression, RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier, KNeighborsClassifier, SVC, GaussianNB, MLPClassifier
+- Import from: sklearn.linear_model, sklearn.ensemble, sklearn.tree, sklearn.neighbors, sklearn.svm, sklearn.naive_bayes, sklearn.neural_network
 - Do NOT use: XGBoost, LightGBM, CatBoost, SHAP
 - Do NOT use optuna if not available - use GridSearchCV instead
+- Check file existence with os.path.exists() before loading
+- Use only: pandas, numpy, sklearn, joblib, json, time, os
 - Start with: import pandas as pd
 """
         
@@ -719,36 +819,38 @@ CRITICAL:
         model_files = [f"{m['Model'].replace(' ', '_')}_model.pkl" for m in top_models]
         
         prompt = f"""
-Write script to create an advanced ensemble using StackingClassifier.
+OUTPUT ONLY PYTHON CODE. NO EXPLANATIONS. START WITH IMPORTS.
 
-Data: X_train_{data_prefix}.csv, X_test_{data_prefix}.csv, y_train.csv, y_test.csv
+Create an advanced ensemble using StackingClassifier.
+
+Data files to load (with fallback):
+- Try X_train_selected.csv first, if not found use X_train_processed.csv
+- Try X_test_selected.csv first, if not found use X_test_processed.csv
+- y_train.csv, y_test.csv
+
 Models to load: {model_files}
 
 Steps:
-1. Load data and models
-2. Create StackingClassifier with loaded models as base estimators
-3. Use LogisticRegression as final estimator
-4. Fit on train data
-5. Evaluate on train and test (accuracy, f1, roc_auc, confusion_matrix)
-6. Save to 'final_ensemble.pkl'
-7. Print JSON metrics
+1. Check if X_train_selected.csv exists, if not use X_train_processed.csv
+2. Load data files with fallback logic
+3. Load models from pickle files
+4. Create StackingClassifier with loaded models as base estimators
+5. Use LogisticRegression as final estimator
+6. Fit on train data
+7. Evaluate on train and test (accuracy, f1, roc_auc, confusion_matrix)
+8. Save to 'final_ensemble.pkl'
+9. Print JSON metrics
 
-Imports:
-from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression
-import pandas as pd
-import joblib
-import json
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
+CRITICAL:
+- Check file existence with os.path.exists() before loading
+- Use only sklearn models
+- Start with: import pandas as pd
 """
         
         try:
             code = self.call_llm_with_retry(prompt)
-            if code.startswith("```python"):
-                code = code.split("```python")[1].split("```")[0]
-            elif code.startswith("```"):
-                code = code.split("```")[1].split("```")[0]
-            return code.strip()
+            code = self._clean_llm_code(code)
+            return code
         except Exception as e:
             return f"print('Error: {str(e)}')"
 

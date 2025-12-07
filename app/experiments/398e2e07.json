@@ -1,0 +1,229 @@
+{
+  "id": "398e2e07",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_182713",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T18:27:48.170969",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem - a binary classification task to predict whether customers will leave (churn) or stay. The dataset contains 6,499 customer records with demographic, service, and billing information. The plan focuses on preprocessing categorical features, engineering meaningful interactions, and using ensemble methods with proper handling of potential class imbalance.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Handle categorical variables: Use OneHotEncoder for nominal categories (Internet Service, Contract, Payment Method) and OrdinalEncoder for binary Yes/No columns (Partner, Dependents, Phone Service, etc.). 3) Gender and Senior Citizen are already encoded as integers. 4) Numerical columns (Tenure, Monthly Charges, Total Charges) will be scaled using RobustScaler to handle potential outliers. 5) Check for any missing values in Total Charges (sometimes blank for new customers with 0 tenure) and impute with 0 or median.",
+        "feature_engineering_strategy": "1) Create tenure groups: New (0-12 months), Medium (13-36 months), Long (37-60 months), Very Long (60+ months). 2) Calculate average monthly charges: Total Charges / (Tenure + 1) to avoid division by zero. 3) Create service count feature: sum of all subscribed services (Phone, Internet, Online Security, etc.). 4) Create interaction features: Tenure * Monthly Charges, Contract type * Monthly Charges. 5) Create binary flags: Has_Internet (from Internet Service != 'No'), Has_Phone (from Phone Service). 6) Create premium customer flag: customers with multiple premium services (Streaming TV, Movies, Online Backup, Device Protection).",
+        "feature_selection_strategy": "Use SelectFromModel with RandomForestClassifier as the base estimator to identify important features, followed by validation using feature_importances_. Additionally, use correlation analysis to remove highly correlated features (threshold > 0.85) to reduce multicollinearity.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "solver": [
+                "lbfgs",
+                "liblinear"
+              ],
+              "max_iter": [
+                1000
+              ]
+            },
+            "regularization_params": {
+              "C": [
+                0.001,
+                0.01,
+                0.1,
+                1,
+                10
+              ],
+              "penalty": [
+                "l2"
+              ]
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                200,
+                300
+              ],
+              "min_samples_split": [
+                2,
+                5,
+                10
+              ],
+              "min_samples_leaf": [
+                1,
+                2,
+                4
+              ],
+              "random_state": [
+                42
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                5,
+                10,
+                15,
+                20,
+                null
+              ],
+              "max_features": [
+                "sqrt",
+                "log2"
+              ]
+            }
+          },
+          {
+            "name": "GradientBoostingClassifier",
+            "params": {
+              "n_estimators": [
+                100,
+                150,
+                200
+              ],
+              "learning_rate": [
+                0.01,
+                0.05,
+                0.1,
+                0.2
+              ],
+              "min_samples_split": [
+                2,
+                5
+              ],
+              "min_samples_leaf": [
+                1,
+                2
+              ],
+              "random_state": [
+                42
+              ]
+            },
+            "regularization_params": {
+              "max_depth": [
+                3,
+                5,
+                7
+              ],
+              "subsample": [
+                0.8,
+                0.9,
+                1.0
+              ]
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "accuracy",
+          "f1",
+          "roc_auc",
+          "precision",
+          "recall"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "class_weight='balanced' for all models - this will automatically adjust weights inversely proportional to class frequencies, giving more importance to the minority class (churned customers)",
+        "outlier_handling": "robust_scaler for numerical features (Tenure, Monthly Charges, Total Charges) as it uses median and IQR, making it robust to outliers. Additionally, apply winsorization at 1st and 99th percentiles for extreme values in Monthly Charges and Total Charges if detected during EDA."
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T18:28:18.605116",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 44}"
+      }
+    },
+    "feature_selection": {
+      "timestamp": "2025-12-07T18:28:41.816104",
+      "data": {
+        "status": "success"
+      }
+    }
+  },
+  "models": [
+    {
+      "name": "LogisticRegression",
+      "timestamp": "2025-12-07T18:28:57.735398",
+      "metrics": {
+        "model": "LogisticRegression",
+        "accuracy": 0.7284615384615385,
+        "train_accuracy": 0.7489901904212348,
+        "precision": 0.7900812715549558,
+        "recall": 0.7284615384615385,
+        "f1_score": 0.7431745859078818,
+        "confusion_matrix": [
+          [
+            682,
+            275
+          ],
+          [
+            78,
+            265
+          ]
+        ],
+        "training_time": 0.016447782516479492,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "RandomForestClassifier",
+      "timestamp": "2025-12-07T18:29:12.685130",
+      "metrics": {
+        "model": "RandomForestClassifier",
+        "accuracy": 0.7738461538461539,
+        "train_accuracy": 0.9973071744566263,
+        "precision": 0.7591267620426997,
+        "recall": 0.7738461538461539,
+        "f1_score": 0.7625007692307693,
+        "confusion_matrix": [
+          [
+            853,
+            104
+          ],
+          [
+            190,
+            153
+          ]
+        ],
+        "training_time": 0.449782133102417,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "GradientBoostingClassifier",
+      "timestamp": "2025-12-07T18:29:25.232817",
+      "metrics": {
+        "model": "GradientBoostingClassifier",
+        "accuracy": 0.7976923076923077,
+        "train_accuracy": 0.8278515099057511,
+        "precision": 0.7869046204576402,
+        "recall": 0.7976923076923077,
+        "f1_score": 0.7890899620580953,
+        "confusion_matrix": [
+          [
+            863,
+            94
+          ],
+          [
+            169,
+            174
+          ]
+        ],
+        "training_time": 0.5221033096313477,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    }
+  ],
+  "metrics": {},
+  "artifacts": []
+}

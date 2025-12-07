@@ -1,0 +1,349 @@
+{
+  "id": "85c99530",
+  "name": "Experiment_train.csv",
+  "timestamp": "20251207_184738",
+  "dataset_info": {
+    "filename": "train.csv",
+    "rows": 6499,
+    "columns": 21
+  },
+  "stages": {
+    "planning": {
+      "timestamp": "2025-12-07T18:48:11.865270",
+      "data": {
+        "plan_overview": "This is a customer churn prediction problem for a telecommunications company. The goal is to predict whether a customer will churn (leave) based on their demographic information, service subscriptions, and billing details. The dataset has 6499 rows with a mix of categorical and numerical features. We will apply comprehensive preprocessing, feature engineering, and evaluate multiple classification models to find the best predictor of churn.",
+        "problem_type": "binary",
+        "target_column": "Churn",
+        "preprocessing_strategy": "1) Drop CustomerID as it's a unique identifier with no predictive value. 2) Encode binary categorical variables (Partner, Dependents, Phone Service, Paperless Billing, Churn) using LabelEncoder. 3) Apply OneHotEncoder to multi-class categorical variables (Multiple Lines, Internet Service, Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies, Contract, Payment Method). 4) Gender and Senior Citizen are already numeric (0/1). 5) Scale numerical features (Tenure, Monthly Charges, Total Charges) using RobustScaler to handle potential outliers. 6) Handle any missing values in Total Charges by imputing with median.",
+        "feature_engineering_strategy": "1) Create tenure groups/bins (e.g., 0-12, 13-24, 25-48, 49-72 months) to capture non-linear tenure effects. 2) Create interaction features: Tenure * Monthly Charges, Contract type * Monthly Charges. 3) Calculate Average Monthly Charge = Total Charges / (Tenure + 1) to capture spending patterns. 4) Create service count feature: sum of all subscribed services (Online Security, Online Backup, Device Protection, Tech Support, Streaming TV, Streaming Movies). 5) Create binary flag for customers with no internet service. 6) Create polynomial features (degree=2) for key numerical variables (Tenure, Monthly Charges).",
+        "feature_selection_strategy": "Apply SelectFromModel using RandomForestClassifier as the base estimator to identify the most important features. Additionally, use mutual_info_classif from SelectKBest to validate feature importance. Target reducing features to top 15-20 most predictive features to avoid overfitting while maintaining model interpretability.",
+        "models": [
+          {
+            "name": "LogisticRegression",
+            "params": {
+              "C": 1.0,
+              "penalty": "l2",
+              "solver": "lbfgs",
+              "max_iter": 1000,
+              "class_weight": "balanced",
+              "random_state": 42
+            }
+          },
+          {
+            "name": "RandomForestClassifier",
+            "params": {
+              "n_estimators": 200,
+              "max_depth": 10,
+              "min_samples_split": 5,
+              "min_samples_leaf": 2,
+              "class_weight": "balanced",
+              "random_state": 42,
+              "n_jobs": -1
+            }
+          },
+          {
+            "name": "GradientBoostingClassifier",
+            "params": {
+              "n_estimators": 150,
+              "learning_rate": 0.1,
+              "max_depth": 5,
+              "min_samples_split": 5,
+              "min_samples_leaf": 2,
+              "subsample": 0.8,
+              "random_state": 42
+            }
+          },
+          {
+            "name": "DecisionTreeClassifier",
+            "params": {
+              "max_depth": 8,
+              "min_samples_split": 10,
+              "min_samples_leaf": 5,
+              "class_weight": "balanced",
+              "random_state": 42
+            }
+          },
+          {
+            "name": "KNeighborsClassifier",
+            "params": {
+              "n_neighbors": 7,
+              "weights": "distance",
+              "metric": "minkowski",
+              "p": 2,
+              "n_jobs": -1
+            }
+          },
+          {
+            "name": "SVC",
+            "params": {
+              "C": 1.0,
+              "kernel": "rbf",
+              "gamma": "scale",
+              "class_weight": "balanced",
+              "probability": true,
+              "random_state": 42
+            }
+          },
+          {
+            "name": "GaussianNB",
+            "params": {
+              "var_smoothing": 1e-09
+            }
+          },
+          {
+            "name": "MLPClassifier",
+            "params": {
+              "hidden_layer_sizes": [
+                100,
+                50
+              ],
+              "activation": "relu",
+              "solver": "adam",
+              "alpha": 0.001,
+              "learning_rate": "adaptive",
+              "max_iter": 500,
+              "early_stopping": true,
+              "validation_fraction": 0.1,
+              "random_state": 42
+            }
+          }
+        ],
+        "evaluation_metrics": [
+          "accuracy",
+          "f1",
+          "roc_auc",
+          "precision",
+          "recall"
+        ],
+        "cross_validation_folds": 5,
+        "handle_imbalance": "class_weight",
+        "outlier_handling": "robust_scaler"
+      }
+    },
+    "preprocessing": {
+      "timestamp": "2025-12-07T18:48:30.915872",
+      "data": {
+        "status": "success",
+        "output": "{\"status\": \"complete\", \"n_features\": 44}"
+      }
+    },
+    "feature_selection": {
+      "timestamp": "2025-12-07T18:50:03.387287",
+      "data": {
+        "status": "success"
+      }
+    }
+  },
+  "models": [
+    {
+      "name": "LogisticRegression",
+      "timestamp": "2025-12-07T18:50:20.065830",
+      "metrics": {
+        "model": "LogisticRegression",
+        "accuracy": 0.7307692307692307,
+        "train_accuracy": 0.7464897095595306,
+        "precision": 0.790329710604587,
+        "recall": 0.7307692307692307,
+        "f1_score": 0.7451973827605807,
+        "confusion_matrix": [
+          [
+            686,
+            271
+          ],
+          [
+            79,
+            264
+          ]
+        ],
+        "training_time": 0.01407003402709961,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "RandomForestClassifier",
+      "timestamp": "2025-12-07T18:50:32.834359",
+      "metrics": {
+        "model": "RandomForestClassifier",
+        "accuracy": 0.7638461538461538,
+        "train_accuracy": 0.9942296595499135,
+        "precision": 0.7495524056817879,
+        "recall": 0.7638461538461538,
+        "f1_score": 0.7538046325164839,
+        "confusion_matrix": [
+          [
+            841,
+            116
+          ],
+          [
+            191,
+            152
+          ]
+        ],
+        "training_time": 0.4627246856689453,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "GradientBoostingClassifier",
+      "timestamp": "2025-12-07T18:50:47.331676",
+      "metrics": {
+        "model": "GradientBoostingClassifier",
+        "accuracy": 0.7907692307692308,
+        "train_accuracy": 0.8282361992690902,
+        "precision": 0.7787508514306715,
+        "recall": 0.7907692307692308,
+        "f1_score": 0.7811558259444492,
+        "confusion_matrix": [
+          [
+            861,
+            96
+          ],
+          [
+            176,
+            167
+          ]
+        ],
+        "training_time": 0.5323410034179688,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "DecisionTreeClassifier",
+      "timestamp": "2025-12-07T18:50:59.729124",
+      "metrics": {
+        "model": "DecisionTreeClassifier",
+        "accuracy": 0.7284615384615385,
+        "train_accuracy": 0.9940373148682439,
+        "precision": 0.7271972222563938,
+        "recall": 0.7284615384615385,
+        "f1_score": 0.7278184511811148,
+        "confusion_matrix": [
+          [
+            783,
+            174
+          ],
+          [
+            179,
+            164
+          ]
+        ],
+        "training_time": 0.019435644149780273,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "KNeighborsClassifier",
+      "timestamp": "2025-12-07T18:51:12.289209",
+      "metrics": {
+        "model": "KNeighborsClassifier",
+        "accuracy": 0.7707692307692308,
+        "train_accuracy": 0.845931909982689,
+        "precision": 0.7647241168864445,
+        "recall": 0.7707692307692308,
+        "f1_score": 0.7672964294813888,
+        "confusion_matrix": [
+          [
+            823,
+            134
+          ],
+          [
+            164,
+            179
+          ]
+        ],
+        "training_time": 0.0019321441650390625,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "SVC",
+      "timestamp": "2025-12-07T18:51:25.604744",
+      "metrics": {
+        "model": "SVC",
+        "accuracy": 0.7369230769230769,
+        "train_accuracy": 0.7586074245047124,
+        "precision": 0.7878903336818136,
+        "recall": 0.7369230769230769,
+        "f1_score": 0.7502243864555235,
+        "confusion_matrix": [
+          [
+            701,
+            256
+          ],
+          [
+            86,
+            257
+          ]
+        ],
+        "training_time": 0.4592721462249756,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "GaussianNB",
+      "timestamp": "2025-12-07T18:51:38.197285",
+      "metrics": {
+        "model": "GaussianNB",
+        "accuracy": 0.6507692307692308,
+        "train_accuracy": 0.6724370071167532,
+        "precision": 0.7871085661676451,
+        "recall": 0.6507692307692308,
+        "f1_score": 0.6705274150723433,
+        "confusion_matrix": [
+          [
+            552,
+            405
+          ],
+          [
+            49,
+            294
+          ]
+        ],
+        "training_time": 0.0022590160369873047,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    },
+    {
+      "name": "MLPClassifier",
+      "timestamp": "2025-12-07T18:51:51.609852",
+      "metrics": {
+        "model": "MLPClassifier",
+        "accuracy": 0.7938461538461539,
+        "train_accuracy": 0.8203500673206385,
+        "precision": 0.7850817899564729,
+        "recall": 0.7938461538461539,
+        "f1_score": 0.7878672785997577,
+        "confusion_matrix": [
+          [
+            850,
+            107
+          ],
+          [
+            161,
+            182
+          ]
+        ],
+        "training_time": 1.4825975894927979,
+        "best_params": {}
+      },
+      "params": {},
+      "artifacts": []
+    }
+  ],
+  "metrics": {},
+  "artifacts": []
+}
